@@ -22,26 +22,64 @@
 
 ---
 
-## 🏗️ System Architecture
+## 🏗️ System Architecture & Workflow
 
-```
-                                 CLOUDFREE-VISION (RelieF-CR) PIPELINE
- 
-   [ 5m Cloudy Optical ] ───► [ Optical Stem ] ─────────────► [ Query Tokens ] ───────┐
-                                                                                       │
-   [ Sentinel-1 SAR (VV/VH) ] ──► [ SAR STN Warping ] ──┐                             ▼
-                                                        ├───► [ Key/Val Projection ] ─► [ Windowed Cross-Attention ]
-   [ Temporal Optical Prior ] ──► [ Temp STN Warping ] ─┘                                      │
-                                                                                               ▼
-   [ 4-Ch CartoDEM (Z, Slope, sin/cos Aspect) ] ────────────► [ DEM Stem ] ───────────► [ Feature Fusion Trunk ]
-                                                                                               │
-                                                                                               ▼
-                                                                                  [ Deep U-Net Decoder Trunk ]
-                                                                                               │
-                                                                         ┌─────────────────────┴─────────────────────┐
-                                                                         ▼                                           ▼
-                                                              [ Reconstructed Optical ]                   [ Uncertainty Map ]
-                                                                 (Green, Red, NIR)                       (Predicted Variance)
+<p align="center">
+  <img src="paper/figures/cloudfree_vision_v2_architecture.png" alt="RelieF-CR Architecture Overview" width="900"/>
+</p>
+
+```mermaid
+graph TD
+    subgraph S1["1. Multi-Modal Sensor Ingestion (5.0m GSD)"]
+        OPT["5.0m LISS-IV Optical<br/>(Green, Red, NIR)"]
+        SAR["10.0m Sentinel-1 SAR<br/>(VV, VH Backscatter)"]
+        TEMP["10.0m Sentinel-2 Temporal<br/>(Dry Season Clear Prior)"]
+        DEM["30.0m CartoDEM Topography<br/>(Elevation, Slope, sin &Phi;, cos &Phi;)"]
+    end
+
+    subgraph S2["2. Geometric & Spatial Alignment"]
+        STN_SAR["SAR Spatial Transformer (STN)<br/>Learned Affine Warping &theta;"]
+        STN_TEMP["Temporal Spatial Transformer (STN)<br/>Learned Affine Warping &theta;"]
+    end
+
+    subgraph S3["3. Cross-Attention & Feature Extraction"]
+        OPT_ENC["Optical Query Generator<br/>(Conv2D + Residual Stem)"]
+        AUX_PROJ["SAR + Temporal Key/Value Bank<br/>(1x1 Conv Projection)"]
+        DEM_ENC["Topographic Stem<br/>(Horn Slope + Aspect Filtering)"]
+        CROSS_ATTN["Windowed Multi-Head Cross-Attention<br/>Q: Optical | K,V: Aligned SAR+Temp<br/>O(HW) Linear Complexity"]
+    end
+
+    subgraph S4["4. Deep Generative Synthesis Trunk"]
+        FUSION["Quad-Modal Feature Fusion Trunk<br/>(Attention Output + DEM Features)"]
+        UNET["Multi-Scale U-Net Decoder<br/>(Skip Connections + Self-Attention Bottleneck)"]
+    end
+
+    subgraph S5["5. Multi-Task Output Heads"]
+        HEAD_MEAN["Reconstructed Optical Output<br/>y_hat &in; R^{3 x H x W} (G, R, NIR)"]
+        HEAD_VAR["Heteroscedastic Uncertainty Head<br/>log &sigma;^2 &in; R^{3 x H x W} (Variance)"]
+    end
+
+    OPT --> OPT_ENC
+    SAR --> STN_SAR
+    TEMP --> STN_TEMP
+    DEM --> DEM_ENC
+
+    OPT_ENC -->|"Query (Q)"| CROSS_ATTN
+    STN_SAR --> AUX_PROJ
+    STN_TEMP --> AUX_PROJ
+    AUX_PROJ -->|"Keys & Values (K, V)"| CROSS_ATTN
+
+    CROSS_ATTN --> FUSION
+    DEM_ENC --> FUSION
+    FUSION --> UNET
+    UNET --> HEAD_MEAN
+    UNET --> HEAD_VAR
+
+    style S1 fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc
+    style S2 fill:#1e293b,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc
+    style S3 fill:#1e293b,stroke:#06b6d4,stroke-width:2px,color:#f8fafc
+    style S4 fill:#1e293b,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    style S5 fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
 ```
 
 ---
@@ -87,6 +125,25 @@ Ingests elevation, Horn's terrain slope, and continuous cyclic aspect decomposit
 | w/o Frequency FFT Loss ($\mathcal{L}_{\text{FFT}}$) | 21.99 | 0.920 | 1.88 | 12.92 | $-7.11\,\text{dB}$ drop; Fourier loss eliminates spectral oversmoothing |
 | w/o Cross-Attention (Concat) | 24.59 | 0.930 | 1.71 | 9.70 | $-4.51\,\text{dB}$ drop; dynamic Q-K-V routing isolates cloud tokens |
 | w/o Uncertainty Head ($\mathcal{L}_{\text{L1}}$ only) | 23.02 | 0.924 | 1.89 | 11.44 | $-6.08\,\text{dB}$ drop; heteroscedastic loss stabilizes GAN gradients |
+
+---
+
+### 3. Qualitative Visual Results & Multi-Modal Showcases
+
+<p align="center">
+  <b>Multi-Modal Qualitative Reconstruction Comparison Grid</b><br/>
+  <img src="paper/figures/comparison_grid.png" alt="Qualitative Comparison Grid" width="900"/>
+</p>
+
+<p align="center">
+  <b>High-Resolution Detail Reconstruction & Residual Analysis</b><br/>
+  <img src="paper/figures/scene_04_p0074_showcase.png" alt="Scene 04 Showcase" width="900"/>
+</p>
+
+<p align="center">
+  <b>Diagnostic Audit: SAR-Optical Edge Gradient Correlation Distribution (1,611 Test Patches)</b><br/>
+  <img src="paper/figures/sar_gradient_correlation_distribution.png" alt="SAR Gradient Correlation Audit" width="900"/>
+</p>
 
 ---
 
