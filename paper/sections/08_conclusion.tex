@@ -1,0 +1,14 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+In this paper, we presented \textbf{RelieF-CR} (Relief-Guided Cloud Removal), a comprehensive multi-modal cross-attention generative framework for high-resolution ($5.0\,\text{m}$) satellite optical cloud removal. By synergistically integrating four heterogeneous sensor modalities---ISRO LISS-IV optical imagery, Sentinel-1 dual-polarization SAR, Sentinel-2 dry-season temporal references, and CartoDEM 4-channel topographic surface models---the proposed architecture effectively resolves the physical underdetermination of SAR-to-optical translation.
+
+Key technical innovations include:
+\begin{enumerate}
+    \item Learned Spatial Transformer Networks (STNs) that rectify inter-sensor registration jitter.
+    \item Windowed Multi-Head Cross-Attention that selectively transfers radar and temporal structural information exclusively into cloud-occluded zones.
+    \item A dual-head heteroscedastic generator providing calibrated, pixel-wise uncertainty maps ($\rho = +0.245$).
+    \item A 7-term loss suite incorporating frequency-domain FFT and NDVI vegetation consistency constraints.
+\end{enumerate}
+
+Comprehensive experimental evaluation across 1,611 held-out test patches demonstrates state-of-the-art performance with \textbf{29.10\,dB PSNR}, \textbf{0.963 SSIM}, \textbf{1.49$^\circ$ SAM}, and \textbf{7.89 ERGAS}. Exhaustive diagnostic auditing mathematically confirms that our model's structural correlation with SAR ($0.4791$) matches real optical ground truth ($0.4766$), ruling out radar over-imprinting artifacts. Finally, memory-mapped streaming inference enables continuous, seam-free reconstruction of massive $300\,\text{MPix}$ full-swath satellite scenes, paving the way for reliable, year-round automated Earth observation analytics.

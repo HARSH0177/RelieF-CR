@@ -1,0 +1,13 @@
+{
+  "ablation": "w/o STN Sub-Pixel Alignment",
+  "epochs": 50,
+  "best_val_psnr": 34.55,
+  "test_metrics": {
+    "psnr": 22.7166,
+    "ssim": 0.9187,
+    "sam": 1.8379,
+    "ergas": 11.8617,
+    "cc": 0.9410,
+    "sar_gradient_correlation": 0.9208
+  }
+}

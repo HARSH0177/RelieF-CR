@@ -1,0 +1,63 @@
+\section{Loss Optimization Suite and Training Dynamics}
+\label{sec:experiments}
+
+\subsection{Comprehensive 7-Term Loss Suite}
+To achieve high radiometric precision while avoiding the classic blurriness of L1 autoencoders, the generator is supervised under a composite 7-term loss suite:
+
+\subsubsection{Heteroscedastic Gaussian NLL Loss ($\mathcal{L}_{\text{NLL}}$)}
+Following Kendall and Gal \cite{kendall2017what}, we supervise the predicted mean $\hat{\mathbf{y}}$ and log-variance $\mathbf{s} = \log \sigma^2$ using an observation-noise attenuated formulation:
+\begin{align}
+    \mathcal{L}_{\text{NLL}} &= \frac{1}{2HWC} \sum_{i,j,c} \Big( \exp(-\mathbf{s}_{i,j,c}) \|\hat{\mathbf{y}}_{i,j,c} - \mathbf{y}_{i,j,c}\|_1 \nonumber \\
+    &\qquad\qquad\quad + \mathbf{s}_{i,j,c} \Big)
+\end{align}
+The exponential term dynamically downweights loss gradients in intrinsically ambiguous, heavily occluded pixels while the linear $\mathbf{s}$ penalty prevents variance explosion ($\mathbf{s} \to \infty$).
+
+\subsubsection{Multi-Scale Spectral L1 Loss ($\mathcal{L}_{\text{L1}}$)}
+Direct absolute pixel difference enforces low-frequency radiometric fidelity across visible and near-infrared bands:
+\begin{equation}
+    \mathcal{L}_{\text{L1}} = \frac{1}{HWC} \|\hat{\mathbf{y}} - \mathbf{y}\|_1
+\end{equation}
+
+\subsubsection{Spectral-Normalized PatchGAN Adversarial Loss ($\mathcal{L}_{\text{Adv}}$)}
+We employ a two-scale discriminator $D = \{D_1, D_2\}$ operating on full and half resolutions. All convolutional layers in $D$ are stabilized using Spectral Normalization \cite{miyato2018spectral} to enforce the 1-Lipschitz condition. Under the Least-Squares GAN (LSGAN) formulation:
+\begin{equation}
+    \mathcal{L}_{\text{Adv}} = \frac{1}{2} \sum_{k=1}^2 \mathbb{E}_{\mathbf{X}}\left[ (D_k(\hat{\mathbf{y}}) - 1)^2 \right]
+\end{equation}
+
+\subsubsection{Discriminator Feature Matching Loss ($\mathcal{L}_{\text{FM}}$)}
+Feature matching minimizes the L1 distance between intermediate activation representations of real and synthesized images across all discriminator layers:
+\begin{equation}
+    \mathcal{L}_{\text{FM}} = \sum_{k=1}^2 \sum_{l=1}^{L_k} \frac{1}{N_{k,l}} \|D_k^{(l)}(\mathbf{y}) - D_k^{(l)}(\hat{\mathbf{y}})\|_1
+\end{equation}
+
+\subsubsection{Frequency-Domain FFT Magnitude Spectrum Loss ($\mathcal{L}_{\text{FFT}}$)}
+To penalize spatial oversmoothing in the frequency domain, we compute the 2D Fast Fourier Transform (FFT) per spectral band:
+\begin{align}
+    \mathcal{L}_{\text{FFT}} &= \frac{1}{C} \sum_{c=1}^C \Big\| \log\left(1 + |\mathcal{F}(\hat{\mathbf{y}}_c)|\right) \nonumber \\
+    &\quad - \log\left(1 + |\mathcal{F}(\mathbf{y}_c)|\right) \Big\|_1
+\end{align}
+
+\subsubsection{Multi-Scale Sobel Structural Edge Loss ($\mathcal{L}_{\text{Sobel}}$)}
+To enforce sharp gradient consistency along structural boundaries, Sobel convolutions extract spatial edge magnitude maps $\mathbf{G}$:
+\begin{equation}
+    \mathcal{L}_{\text{Sobel}} = \frac{1}{C} \sum_{c=1}^C \|\mathbf{G}(\hat{\mathbf{y}}_c) - \mathbf{G}(\mathbf{y}_c)\|_1
+\end{equation}
+where $\mathbf{G}(\mathbf{y}) = \sqrt{(\mathbf{K}_x * \mathbf{y})^2 + (\mathbf{K}_y * \mathbf{y})^2}$ via horizontal and vertical kernels $\mathbf{K}_x, \mathbf{K}_y$.
+
+\subsubsection{Spectral Angle \& Vegetation Index Consistency Loss ($\mathcal{L}_{\text{Spec}}$)}
+To guarantee radiometric preservation for downstream agricultural analysis, we penalize Normalized Difference Vegetation Index (NDVI) deviation:
+\begin{align}
+    \text{NDVI}(\mathbf{y}) &= \frac{\mathbf{y}_{\text{NIR}} - \mathbf{y}_{\text{Red}}}{\mathbf{y}_{\text{NIR}} + \mathbf{y}_{\text{Red}} + \epsilon} \\
+    \mathcal{L}_{\text{Spec}} &= \|\text{NDVI}(\hat{\mathbf{y}}) - \text{NDVI}(\mathbf{y})\|_1
+\end{align}
+
+\subsubsection{Total Generator Objective \& Loss Weighting Rationale}
+The overall multi-task training objective is defined as:
+\begin{align}
+    \mathcal{L}_{\text{Total}} &= 1.0\,\mathcal{L}_{\text{NLL}} + 10.0\,\mathcal{L}_{\text{L1}} + 10.0\,\mathcal{L}_{\text{FM}} \nonumber \\
+    &\quad + 0.1\,\mathcal{L}_{\text{FFT}} + 0.5\,\mathcal{L}_{\text{Sobel}} + 0.2\,\mathcal{L}_{\text{Spec}} + 1.0\,\mathcal{L}_{\text{Adv}}
+\end{align}
+The dominant weighting assigned to $\mathcal{L}_{\text{L1}}$ ($w_{\text{L1}} = 10.0$) and feature matching relative to the adversarial penalty ($w_{\text{adv}} = 1.0$) is deliberately designed to enforce strict radiometric preservation of physical surface reflectance (vital for agricultural NDVI analytics), while the FFT and Sobel edge losses eliminate texture oversmoothing without unconstrained GAN hallucination.
+
+\subsection{Distributed Training Implementation Details}
+The model was trained for 50 epochs on dual NVIDIA Tesla T4 GPUs (16\,GB VRAM each) using PyTorch Distributed Data Parallel with NCCL backend and Automatic Mixed Precision (\texttt{fp16}). Optimization utilized the AdamW optimizer ($\beta_1 = 0.5$, $\beta_2 = 0.999$, weight decay $10^{-4}$) with a batch size of 16 patches per GPU (effective batch size 32). The learning rate was initialized at $2 \times 10^{-4}$ and decayed to $10^{-6}$ via a cosine annealing schedule. An Exponential Moving Average (EMA) shadow model with decay $\beta_{\text{EMA}} = 0.999$ was maintained for all inference evaluations. Total training completed in 4.7 hours across 11,950 training patches.
