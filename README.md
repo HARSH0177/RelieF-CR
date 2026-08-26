@@ -95,8 +95,8 @@ Ingests elevation, Horn's terrain slope, and continuous cyclic aspect decomposit
 ### 1. Clone & Install Dependencies
 
 ```bash
-git clone https://github.com/HARSH0177/CloudFree-Vision.git
-cd CloudFree-Vision
+git clone https://github.com/HARSH0177/RelieF-CR.git
+cd RelieF-CR
 
 # Create and activate virtual environment
 python -m venv venv
