@@ -235,18 +235,15 @@ Evaluated strictly inside the cloud-occluded spatial region ($\mathbf{M} > 0.5$)
 
 ---
 
-### 5-Variant Systematic Ablation Study (50 Epochs)
+### Architectural Component Analysis & Physical Design Trade-offs
 
-All five ablation models were trained from scratch for 50 full epochs on identical splits and evaluated on all 1,611 test patches:
+Each component of **RelieF-CR** is tailored to address specific physical failure modes in multi-sensor cloud removal:
 
-| Architecture Variant | PSNR (dB) $\uparrow$ | SSIM $\uparrow$ | SAM ($^\circ$) $\downarrow$ | ERGAS $\downarrow$ | CC $\uparrow$ | Physical / Architectural Rationale |
-| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **Full Proposed Model** | **29.10** | **0.963** | **1.49** | **7.89** | **0.863** | **Best overall across all metrics** |
-| w/o 4-Channel Topography (DEM) | 23.07 | 0.921 | 1.80 | 11.51 | 0.941 | $-6.03\,\text{dB}$ drop; slope/aspect resolves terrain radar layover |
-| w/o STN Sub-Pixel Alignment | 22.72 | 0.919 | 1.84 | 11.86 | 0.941 | $-6.38\,\text{dB}$ drop; affine warping prevents cross-sensor blur |
-| w/o Frequency FFT Loss ($\mathcal{L}_{\text{FFT}}$) | 21.99 | 0.920 | 1.88 | 12.92 | 0.935 | $-7.11\,\text{dB}$ drop; Fourier loss eliminates spectral oversmoothing |
-| w/o Cross-Attention (Concat) | 24.59 | 0.930 | 1.71 | 9.70 | 0.952 | $-4.51\,\text{dB}$ drop; dynamic Q-K-V routing isolates cloud tokens |
-| w/o Uncertainty Head ($\mathcal{L}_{\text{L1}}$ only) | 23.02 | 0.924 | 1.89 | 11.44 | 0.940 | $-6.08\,\text{dB}$ drop; heteroscedastic loss stabilizes GAN gradients |
+* **Spatial Transformer Alignment (STN):** Mitigates inter-sensor registration jitter between native $5.0\,\text{m}$ LISS-IV and resampled $10.0\,\text{m}$ Sentinel-1/2 grids, preventing geometric double edges and blurred parcel boundaries.
+* **4-Channel Topographic Surface Descriptors:** Explicitly supplies terrain slope and decomposed aspect ($\sin\Phi, \cos\Phi$) from CartoDEM, enabling the network to disambiguate topographic radar shadowing from optical vegetation absorption.
+* **Frequency-Domain FFT Loss ($\mathcal{L}_{\text{FFT}}$):** Enforces spectral magnitude consistency in the 2D Fourier domain, eliminating the spatial oversmoothing commonly observed in pure spatial L1 optimization.
+* **Windowed Multi-Head Cross-Attention:** Limits query-key-value interactions to local $8\times 8$ windows, achieving linear computational complexity $\mathcal{O}(HW)$ while dynamically routing radar and temporal information only into cloud-occluded tokens.
+* **Heteroscedastic Observation-Noise Attenuation:** Prevents over-penalization of ambiguous cloud cores during gradient descent, stabilizing multi-modal feature fusion.
 
 ---
 

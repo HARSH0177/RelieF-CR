@@ -45,38 +45,16 @@ The predicted uncertainty log-variance $\mathbf{s} = \log \sigma^2$ was evaluate
 \end{equation}
 This statistically significant positive correlation indicates that the predicted variance reflects relative spatial ambiguity---assigning higher uncertainty values to deeply shadowed or opaque cloud cores while remaining low across clear terrain and visible boundaries.
 
-\subsection{Empirical Ablation Study of Architectural Modules}
-\label{sec:ablation_experiments}
-To quantitatively evaluate the isolated contribution of each architectural innovation, we conducted a systematic ablation study by training five distinct 50-epoch model variants on identical training splits and evaluating them across all 1,611 held-out test patches. Table~\ref{tab:ablations} summarizes the quantitative findings.
-
-\begin{table}[!t]
-\centering
-\caption{Empirical Ablation Study of Proposed Architectural Modules Across 1,611 Held-Out Test Patches (50 Epochs).}
-\label{tab:ablations}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{lccccc}
-\toprule
-Architecture Variant & PSNR\,(dB) $\uparrow$ & SSIM $\uparrow$ & SAM\,(deg) $\downarrow$ & ERGAS $\downarrow$ & CC $\uparrow$ \\
-\midrule
-\textbf{Full Model (RelieF-CR)} & \textbf{29.10} & \textbf{0.963} & \textbf{1.49} & \textbf{7.89} & \textbf{0.863} \\
-w/o 4-Channel Topography (DEM) & 23.07 & 0.921 & 1.80 & 11.51 & 0.941 \\
-w/o Sub-Pixel Alignment (STN) & 22.72 & 0.919 & 1.84 & 11.86 & 0.941 \\
-w/o Frequency FFT Loss ($\mathcal{L}_{\text{FFT}}$) & 21.99 & 0.920 & 1.88 & 12.92 & 0.935 \\
-w/o Cross-Attention (Concat Fusion) & 24.59 & 0.930 & 1.71 & 9.70 & 0.952 \\
-w/o Heteroscedastic Uncertainty Head & 23.02 & 0.924 & 1.89 & 11.44 & 0.940 \\
-\bottomrule
-\end{tabular}%
-}
-\end{table}
-
-Key observations from Table~\ref{tab:ablations} include:
-\begin{enumerate}
-    \item \textbf{Impact of Topography Guidance ($\Delta = +6.03\,\text{dB}$ PSNR):} Removing the 4-channel DEM descriptor degrades PSNR from $29.10\,\text{dB}$ to $23.07\,\text{dB}$ and increases ERGAS from $7.89$ to $11.51$. Without explicit slope and aspect descriptors, the generator struggles to distinguish terrain-induced radar layover/shadow from genuine optical cloud occlusion.
-    \item \textbf{Impact of STN Sub-Pixel Registration ($\Delta = +6.38\,\text{dB}$ PSNR):} Bypassing learned spatial affine alignment drops PSNR to $22.72\,\text{dB}$ and SSIM to $0.919$. Inter-sensor registration jitter between native $5.0\,\text{m}$ LISS-IV and upsampled $10.0\,\text{m}$ Sentinel-1/2 grids creates double-edge boundary blur unless dynamically aligned.
-    \item \textbf{Impact of Frequency-Domain FFT Supervision ($\Delta = +7.11\,\text{dB}$ PSNR):} Setting $w_{\text{FFT}} = 0.0$ causes the largest spectral degradation in the study, worsening ERGAS to $12.92$ and SAM to $1.88^\circ$. Fourier magnitude supervision is vital to preventing high-frequency texture oversmoothing.
-    \item \textbf{Cross-Attention vs. Naive Concatenation ($\Delta = +4.51\,\text{dB}$ PSNR):} Replacing windowed cross-attention with fixed channel concatenation reduces PSNR to $24.59\,\text{dB}$. Dynamic Q-K-V routing allows clear optical query tokens to preserve clear terrain while selectively querying SAR/temporal keys only within clouded areas.
-    \item \textbf{Heteroscedastic Uncertainty Attenuation ($\Delta = +6.08\,\text{dB}$ PSNR):} Disabling the log-variance head and training with standard $\mathcal{L}_{\text{L1}}$ loss drops performance to $23.02\,\text{dB}$, as unattenuated penalty over ambiguous cloud cores destabilizes gradient backpropagation.
-\end{enumerate}
+\subsection{Architectural Component Analysis and Design Trade-offs}
+Each component of \textbf{RelieF-CR} is tailored to address specific physical failure modes in multi-sensor cloud removal:
+\begin{itemize}
+    \item \textbf{Spatial Transformer Alignment (STN):} Mitigates inter-sensor registration jitter between native $5.0\,\text{m}$ LISS-IV and resampled $10.0\,\text{m}$ Sentinel-1/2 grids, preventing geometric double edges and blurred parcel boundaries.
+    \item \textbf{4-Channel Topographic Surface Descriptors:} Explicitly supplies terrain slope and decomposed aspect ($\sin\Phi, \cos\Phi$) from CartoDEM, enabling the network to disambiguate topographic radar shadowing from optical vegetation absorption.
+    \item \textbf{Frequency-Domain FFT Loss ($\mathcal{L}_{\text{FFT}}$):} Enforces spectral magnitude consistency in the 2D Fourier domain, eliminating the spatial oversmoothing commonly observed in pure spatial L1 optimization.
+    \item \textbf{Windowed Multi-Head Cross-Attention:} Limits query-key-value interactions to local $8\times 8$ windows, achieving linear computational complexity $\mathcal{O}(HW)$ while dynamically routing radar and temporal information only into cloud-occluded tokens.
+    \item \textbf{Heteroscedastic Observation-Noise Attenuation:} Prevents over-penalization of ambiguous cloud cores during gradient descent, stabilizing multi-modal feature fusion.
+\end{itemize}
+While the present study validates the integrated end-to-end framework across all 1,611 held-out test patches, systematic quantitative sensitivity sweeps isolating individual module variations across broader global ecotopes remain an active area for expanded multi-sensor benchmark campaigns.
 
 \subsection{Full-Swath Memory-Mapped Streaming Inference}
 For operational deployment on full-swath LISS-IV scenes ($16,000 \times 18,000$ pixels, $>300\,\text{megapixels}$), memory allocation exceeds standard GPU VRAM capacity. We implemented a streaming sliding-window inference pipeline utilizing memory-mapped virtual disk accumulators and virtual raster projections.
