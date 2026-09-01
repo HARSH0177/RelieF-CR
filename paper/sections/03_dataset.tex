@@ -6,7 +6,7 @@ To benchmark \textbf{RelieF-CR} under realistic tropical operational conditions,
 \begin{figure*}[!t]
 \centering
 \includegraphics[width=0.98\textwidth]{comparison_grid.png}
-\caption{\textbf{Qualitative Multi-Modal Comparison Grid on Representative Test Scenes.} Columns 1 to 6 show: (1) Input Cloudy LISS-IV optical composite, (2) Ground truth cloud opacity mask $\mathbf{M} \in [0, 1]$, (3) Sentinel-1 C-band SAR VV backscatter, (4) CartoDEM topographic elevation surface, (5) RelieF-CR reconstructed clear-sky optical image $\hat{\mathbf{y}}$, and (6) Ground truth clear-sky reference $\mathbf{y}$. Across varying cloud densities, the model completely removes cloud occlusions and recovers fine parcel boundaries, water bodies, and vegetation textures.}
+\caption{\textbf{Qualitative Multi-Modal Cloud Removal Showcase Across Diverse Test Scenes.} Columns (a) to (h) depict: (a) Input cloudy LISS-IV optical composite (NIR-Red-Green false-color infrared with 2\% percentile stretch), (b) Stage-A cloud/shadow opacity mask, (c) Co-registered Sentinel-1 SAR VV backscatter, (d) CartoDEM topographic relief surface, (e) RelieF-CR reconstructed clear-sky optical reflectance $\hat{\mathbf{y}}$, (f) Ground truth clear-sky optical reference $\mathbf{y}$, (g) Pixel-wise absolute reconstruction error map ($|\hat{\mathbf{y}} - \mathbf{y}|$), and (h) Predicted heteroscedastic uncertainty standard deviation map ($\sigma$). Across varying cloud densities (8\% to 44\%), the model completely removes cloud occlusions and recovers fine parcel boundaries, irrigation channels, and vegetation textures with near-zero residual error.}
 \label{fig:qualitative_grid}
 \end{figure*}
 
