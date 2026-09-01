@@ -6,7 +6,6 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from matplotlib.patches import Rectangle
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -17,6 +16,7 @@ from models.generator import CloudReconstructionGeneratorV2
 from data.dataset import CloudReconstructionDataset
 
 def stretch_rgb(img_3ch):
+    # CIR composite: R=NIR (ch2), G=Red (ch1), B=Green (ch0)
     cir = img_3ch[[2, 1, 0]].copy()
     stretched = np.zeros_like(cir)
     for c in range(3):
@@ -29,10 +29,13 @@ def stretch_rgb(img_3ch):
     return stretched.transpose(1, 2, 0)
 
 def stretch_sar(sar_2d):
-    p2, p98 = np.percentile(sar_2d, (2, 98))
-    if p98 > p2 + 1e-4:
-        return np.clip((sar_2d - p2) / (p98 - p2), 0, 1)
-    return np.clip(sar_2d, 0, 1)
+    # Dynamic 1%-99% percentile stretch on SAR backscatter
+    p1, p99 = np.percentile(sar_2d, (1, 99))
+    if p99 > p1 + 1e-5:
+        norm = np.clip((sar_2d - p1) / (p99 - p1), 0.0, 1.0)
+    else:
+        norm = np.clip(sar_2d - sar_2d.min(), 0.0, 1.0)
+    return norm
 
 def stretch_dem(dem_4ch):
     elev = dem_4ch[0]
@@ -41,7 +44,7 @@ def stretch_dem(dem_4ch):
     p2_s, p98_s = np.percentile(slope, (2, 98))
     norm_e = np.clip((elev - p2_e) / (p98_e - p2_e + 1e-4), 0, 1)
     norm_s = np.clip((slope - p2_s) / (p98_s - p2_s + 1e-4), 0, 1)
-    relief = 0.6 * norm_e + 0.4 * norm_s
+    relief = 0.55 * norm_e + 0.45 * norm_s
     return np.clip(relief, 0, 1)
 
 def main():
@@ -55,11 +58,12 @@ def main():
     gen.load_state_dict(ckpt['gen_ema_state'])
     gen.eval()
     
+    # 4 verified high-texture swath-interior test patches with genuine SAR speckle & topography
     candidate_patches = [
-        ('scene_01_p0062', 285),
-        ('scene_01_p0224', 447),
-        ('scene_02_p0023', 563),
-        ('scene_05_p0251', 1516)
+        ('scene_03_p0006', 890),  # 27.8% cloud, rich radar speckle
+        ('scene_03_p0032', 916),  # 41.9% cloud, strong SAR backscatter & mountain terrain
+        ('scene_03_p0009', 893),  # 43.8% cloud, parcel & river texture
+        ('scene_03_p0003', 887)   # 59.6% heavy cloud, dense agricultural vegetation
     ]
     
     cols = [
@@ -105,7 +109,7 @@ def main():
             axes[r, 3].imshow(stretch_dem(dem_data), cmap='terrain')
             axes[r, 4].imshow(stretch_rgb(rec))
             axes[r, 5].imshow(stretch_rgb(gt))
-            im_err = axes[r, 6].imshow(abs_err, cmap='inferno', vmin=0.0, vmax=0.20)
+            im_err = axes[r, 6].imshow(abs_err, cmap='inferno', vmin=0.0, vmax=0.15)
             im_unc = axes[r, 7].imshow(std_fake, cmap='magma', vmin=0.04, vmax=0.18)
             
             for c in range(num_cols):
@@ -117,7 +121,7 @@ def main():
                 if r == 0:
                     axes[r, c].set_title(cols[c], fontsize=9, fontweight='bold', pad=6)
             
-            cloud_pct = float(mask.sum()) / float(mask.size) * 100.0
+            cloud_pct = float((mask > 0.1).mean()) * 100.0
             axes[r, 0].set_ylabel(f'Sample {r+1}\n({cloud_pct:.1f}% Cloud)', fontsize=8, fontweight='bold')
     
     plt.tight_layout()
@@ -125,7 +129,7 @@ def main():
     
     cbar_ax_err = fig.add_axes([0.765, 0.02, 0.10, 0.015])
     cb_err = fig.colorbar(im_err, cax=cbar_ax_err, orientation='horizontal')
-    cb_err.set_ticks([0.0, 0.10, 0.20])
+    cb_err.set_ticks([0.0, 0.07, 0.15])
     cb_err.ax.tick_params(labelsize=6)
     cb_err.set_label('Abs Error $|\\hat{y} - y|$', fontsize=7, fontweight='bold')
     
@@ -141,7 +145,7 @@ def main():
     
     plt.savefig(out_png, dpi=300, bbox_inches='tight')
     plt.savefig(out_pdf, dpi=300, bbox_inches='tight')
-    print('SUCCESS: Generated publication-grade comparison_grid.png and .pdf')
+    print('SUCCESS: Generated authentic swath-interior comparison_grid.png and .pdf')
 
 if __name__ == '__main__':
     main()
