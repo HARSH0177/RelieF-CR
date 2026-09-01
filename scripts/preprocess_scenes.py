@@ -22,7 +22,7 @@ import scipy.ndimage
 
 try:
     import rasterio
-    from rasterio.warp import Resampling, transform_bounds
+    from rasterio.warp import reproject, Resampling, transform_bounds
     from rasterio.vrt import WarpedVRT
     from rasterio.windows import Window
 except ImportError:
@@ -107,11 +107,19 @@ def horns_method_patch(elevation_pad: np.ndarray, global_min: float, global_max:
 
 
 def sar_dn_to_scaled_db_patch(sar_vv_dn: np.ndarray, sar_vh_dn: np.ndarray) -> np.ndarray:
-    vv_log = np.log10(np.clip(sar_vv_dn, 10.0, 500.0))
-    vh_log = np.log10(np.clip(sar_vh_dn, 5.0, 300.0))
+    """
+    Converts Sentinel-1 GRD digital numbers (DN) to continuous log-amplitude
+    and maps linearly to [-1.0, 1.0] float32 range.
+    """
+    vv_float = sar_vv_dn.astype(np.float32)
+    vh_float = sar_vh_dn.astype(np.float32)
 
-    vv_scaled = 2.0 * (vv_log - 1.0) / (np.log10(500.0) - 1.0) - 1.0
-    vh_scaled = 2.0 * (vh_log - 0.69897) / (np.log10(300.0) - 0.69897) - 1.0
+    # Continuous Log10 amplitude scaling (standard IEEE TGRS SAR normalization)
+    vv_log = np.log10(np.clip(vv_float, 5.0, 800.0))
+    vh_log = np.log10(np.clip(vh_float, 2.0, 400.0))
+
+    vv_scaled = 2.0 * (vv_log - np.log10(5.0)) / (np.log10(800.0) - np.log10(5.0)) - 1.0
+    vh_scaled = 2.0 * (vh_log - np.log10(2.0)) / (np.log10(400.0) - np.log10(2.0)) - 1.0
 
     return np.stack([vv_scaled, vh_scaled], axis=0).astype(np.float32)
 
@@ -283,34 +291,17 @@ def process_scene_streaming(
     del dem_sample, valid_dem, dem_samples
     print(f"  Global DEM elevation range (decimated, {len(dem_vrts)} overlapping tiles): [{global_dem_min:.1f}m, {global_dem_max:.1f}m]", flush=True)
 
-    sar_vv_vrt = None
-    sar_vh_vrt = None
+    svv_src = None
+    svh_src = None
+    gcps_list_vv, gcps_crs_vv = None, None
+    gcps_list_vh, gcps_crs_vh = None, None
+
     if best_sar_vv and os.path.exists(best_sar_vv):
         svv_src = rasterio.open(best_sar_vv)
-        gcps_list, gcps_crs = svv_src.gcps if (svv_src.gcps and len(svv_src.gcps[0]) > 0) else (None, None)
-        sar_vv_vrt = WarpedVRT(
-            svv_src,
-            crs=target_crs,
-            transform=target_transform,
-            width=width,
-            height=height,
-            src_crs=gcps_crs or svv_src.crs or 'EPSG:4326',
-            src_gcps=gcps_list,
-            resampling=Resampling.bilinear
-        )
+        gcps_list_vv, gcps_crs_vv = svv_src.gcps if (svv_src.gcps and len(svv_src.gcps[0]) > 0) else (None, None)
     if best_sar_vh and os.path.exists(best_sar_vh):
         svh_src = rasterio.open(best_sar_vh)
         gcps_list_vh, gcps_crs_vh = svh_src.gcps if (svh_src.gcps and len(svh_src.gcps[0]) > 0) else (None, None)
-        sar_vh_vrt = WarpedVRT(
-            svh_src,
-            crs=target_crs,
-            transform=target_transform,
-            width=width,
-            height=height,
-            src_crs=gcps_crs_vh or svh_src.crs or 'EPSG:4326',
-            src_gcps=gcps_list_vh,
-            resampling=Resampling.bilinear
-        )
 
     s2_vrts = []
     if best_s2_b03 and os.path.exists(best_s2_b03):
@@ -386,14 +377,37 @@ def process_scene_streaming(
                         rejection_reasons["opt_low_variance"] += 1
                         continue
 
-                    if not (sar_vv_vrt and sar_vh_vrt):
+                    if not (svv_src and svh_src):
                         rejection_reasons["sar_missing"] += 1
                         continue
 
-                    sar_vv_dn = sar_vv_vrt.read(1, window=win).astype(np.float32)
-                    sar_vh_dn = sar_vh_vrt.read(1, window=win).astype(np.float32)
+                    dst_win_tf = rasterio.windows.transform(win, target_transform)
+                    sar_vv_dn = np.zeros((patch_size, patch_size), dtype=np.float32)
+                    sar_vh_dn = np.zeros((patch_size, patch_size), dtype=np.float32)
 
-                    if (sar_vv_dn == 0.0).mean() > 0.10 or (sar_vh_dn == 0.0).mean() > 0.10:
+                    reproject(
+                        source=rasterio.band(svv_src, 1),
+                        destination=sar_vv_dn,
+                        src_gcps=gcps_list_vv,
+                        src_crs=gcps_crs_vv or 'EPSG:4326',
+                        dst_transform=dst_win_tf,
+                        dst_crs=target_crs,
+                        resampling=Resampling.bilinear,
+                        warp_mem_limit=256
+                    )
+
+                    reproject(
+                        source=rasterio.band(svh_src, 1),
+                        destination=sar_vh_dn,
+                        src_gcps=gcps_list_vh,
+                        src_crs=gcps_crs_vh or 'EPSG:4326',
+                        dst_transform=dst_win_tf,
+                        dst_crs=target_crs,
+                        resampling=Resampling.bilinear,
+                        warp_mem_limit=256
+                    )
+
+                    if (sar_vv_dn <= 0.0).mean() > 0.10 or (sar_vh_dn <= 0.0).mean() > 0.10:
                         rejection_reasons["sar_nodata"] += 1
                         continue
 
@@ -485,10 +499,10 @@ def process_scene_streaming(
     for src in dem_sources:
         src.close()
 
-    if sar_vv_vrt:
-        sar_vv_vrt.close()
-    if sar_vh_vrt:
-        sar_vh_vrt.close()
+    if svv_src:
+        svv_src.close()
+    if svh_src:
+        svh_src.close()
     for vrt in s2_vrts:
         vrt.close()
 
