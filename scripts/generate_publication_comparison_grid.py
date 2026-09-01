@@ -14,25 +14,30 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, 'data'))
 from models.generator import CloudReconstructionGeneratorV2
 from data.dataset import CloudReconstructionDataset
 
-def enhance_cir(img_chw01):
+def balance_cir(img_chw01):
     # LISS-IV: ch0=Green, ch1=Red, ch2=NIR
-    # CIR: R=NIR, G=Red, B=Green
+    # Standard CIR: R=NIR, G=Red, B=Green
     nir = img_chw01[2]
     red = img_chw01[1]
     green = img_chw01[0]
-    cir = np.stack([nir, red, green], axis=-1)
-    p2 = np.percentile(cir, 2.0)
-    p98 = np.percentile(cir, 98.0)
-    if p98 > p2 + 1e-4:
-        return np.clip((cir - p2) / (p98 - p2), 0.0, 1.0)
-    return np.clip(cir, 0.0, 1.0)
 
-def stretch_sar(sar_2d):
-    s_min = float(sar_2d.min())
-    s_max = float(sar_2d.max())
-    if s_max > s_min + 1e-6:
-        return (sar_2d - s_min) / (s_max - s_min)
-    return np.zeros_like(sar_2d) + 0.5
+    p2_n, p98_n = np.percentile(nir, (2, 98))
+    p2_r, p98_r = np.percentile(red, (2, 98))
+    p2_g, p98_g = np.percentile(green, (2, 98))
+
+    nir_s = np.clip((nir - p2_n) / (p98_n - p2_n + 1e-5), 0, 1)
+    red_s = np.clip((red - p2_r) / (p98_r - p2_r + 1e-5), 0, 1)
+    green_s = np.clip((green - p2_g) / (p98_g - p2_g + 1e-5), 0, 1)
+
+    # Balanced False Color: Natural deep crimson vegetation, cyan/grey soil & roads
+    return np.stack([nir_s, red_s * 0.85, green_s * 0.85], axis=-1)
+
+def render_sar(sar_2d):
+    # Standard percentile stretch
+    p2, p98 = np.percentile(sar_2d, (2, 98))
+    if p98 > p2 + 1e-6:
+        return np.clip((sar_2d - p2) / (p98 - p2), 0.0, 1.0)
+    return np.clip(sar_2d - sar_2d.min() + 0.5, 0.0, 1.0)
 
 def enhance_dem(dem_4ch):
     elev = dem_4ch[0]
@@ -54,12 +59,11 @@ def main():
     gen.load_state_dict(ckpt['gen_ema_state'])
     gen.eval()
 
-    # 4 verified 100% cloud-free Ground Truth test patches with rich landmarks & sharp boundaries
     selected_pids = [
-        'scene_04_p0305',  # 42.9% cloud, 33.4 dB, clear parcel landmarks & river bend
-        'scene_01_p0115',  # 31.7% cloud, 31.6 dB, agricultural vegetation parcel grids
-        'scene_02_p0037',  # 29.8% cloud, 36.4 dB, mountain topography relief & valleys
-        'scene_04_p0309'   # 25.6% cloud, 29.0 dB, river/drainage boundaries & farmland
+        'scene_04_p0305',  # 42.9% cloud, PSNR=33.40 dB, sharp parcel grid
+        'scene_01_p0115',  # 31.7% cloud, PSNR=31.56 dB, agricultural parcels
+        'scene_02_p0037',  # 29.8% cloud, PSNR=36.43 dB, mountain topography
+        'scene_04_p0309'   # 25.6% cloud, PSNR=29.00 dB, river & road lines
     ]
 
     cols = [
@@ -70,7 +74,7 @@ def main():
         '(e) RelieF-CR (Ours)\n(Reconstruction)',
         '(f) Ground Truth\n(Clear-Sky CIR)',
         '(g) Absolute Error\n(|Recon - GT|)',
-        '(h) Uncertainty\n(Predicted Std $\\sigma$)'
+        '(h) Uncertainty\n(Predicted Std)'
     ]
 
     num_rows = len(selected_pids)
@@ -101,12 +105,12 @@ def main():
 
             abs_err = np.mean(np.abs(rec - gt), axis=0)
 
-            axes[r, 0].imshow(enhance_cir(c_in))
+            axes[r, 0].imshow(balance_cir(c_in))
             axes[r, 1].imshow(mask_2d, cmap='Blues_r', vmin=0, vmax=1)
-            axes[r, 2].imshow(stretch_sar(sar_vv), cmap='gray')
+            axes[r, 2].imshow(render_sar(sar_vv), cmap='gray')
             axes[r, 3].imshow(enhance_dem(dem_data), cmap='terrain')
-            axes[r, 4].imshow(enhance_cir(rec))
-            axes[r, 5].imshow(enhance_cir(gt))
+            axes[r, 4].imshow(balance_cir(rec))
+            axes[r, 5].imshow(balance_cir(gt))
             im_err = axes[r, 6].imshow(abs_err, cmap='inferno', vmin=0.0, vmax=0.12)
             im_unc = axes[r, 7].imshow(std_fake, cmap='magma', vmin=0.04, vmax=0.18)
 
@@ -129,19 +133,19 @@ def main():
     cb_err = fig.colorbar(im_err, cax=cbar_ax_err, orientation='horizontal')
     cb_err.set_ticks([0.0, 0.06, 0.12])
     cb_err.ax.tick_params(labelsize=6)
-    cb_err.set_label('Abs Error $|\\hat{y} - y|$', fontsize=7, fontweight='bold')
+    cb_err.set_label('Abs Error |y_hat - y|', fontsize=7, fontweight='bold')
 
     cbar_ax_unc = fig.add_axes([0.885, 0.02, 0.10, 0.015])
     cb_unc = fig.colorbar(im_unc, cax=cbar_ax_unc, orientation='horizontal')
     cb_unc.set_ticks([0.04, 0.11, 0.18])
     cb_unc.ax.tick_params(labelsize=6)
-    cb_unc.set_label('Pred Std $\\sigma$', fontsize=7, fontweight='bold')
+    cb_unc.set_label('Pred Std sigma', fontsize=7, fontweight='bold')
 
     out_png = os.path.join(PROJECT_ROOT, 'paper', 'figures', 'comparison_grid.png')
     out_pdf = os.path.join(PROJECT_ROOT, 'paper', 'figures', 'comparison_grid.pdf')
     plt.savefig(out_png, dpi=300, bbox_inches='tight')
     plt.savefig(out_pdf, dpi=300, bbox_inches='tight')
-    print('SUCCESS: Master Figure 2 generated!')
+    print('SUCCESS: Generated balanced comparison_grid.png and .pdf')
 
 if __name__ == '__main__':
     main()
