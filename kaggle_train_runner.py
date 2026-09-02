@@ -7,38 +7,74 @@ import subprocess
 import argparse
 import time
 
-def find_dataset_zips():
+def resolve_dataset_root(custom_root=None):
+    """
+    Intelligently finds or prepares the dataset root.
+    Handles:
+      1. Pre-extracted directory in /kaggle/input (e.g. /kaggle/input/.../train)
+      2. Zip archives in /kaggle/input (train.zip, val.zip, test.zip)
+      3. Custom specified --data_root
+    """
+    if custom_root and os.path.isdir(os.path.join(custom_root, "train")):
+        print(f"Using explicitly specified data_root: {custom_root}")
+        return custom_root
+
     search_roots = ["/kaggle/input", "/kaggle/working", ".", "./dataset_archives"]
+    
+    # Check 1: Is there an ALREADY EXTRACTED train folder anywhere in inputs?
+    for s_root in search_roots:
+        if os.path.isdir(s_root):
+            for root, dirs, _ in os.walk(s_root):
+                if "train" in dirs:
+                    train_dir = os.path.join(root, "train")
+                    # Verify train contains subfolders or .npy files
+                    if os.path.exists(os.path.join(train_dir, "opt_clean")) or os.path.exists(os.path.join(train_dir, "opt_cloudy")):
+                        print(f"Found ready-to-use extracted dataset at: {root}")
+                        return root
+
+    # Check 2: Are there ZIP archives to extract?
     zips = {"train": None, "val": None, "test": None}
     for s_root in search_roots:
         if os.path.isdir(s_root):
             for zf in glob.glob(os.path.join(s_root, "**", "*.zip"), recursive=True):
                 fname = os.path.basename(zf).lower()
-                if "train" in fname and zips["train"] is None:
-                    zips["train"] = zf
-                elif "val" in fname and zips["val"] is None:
-                    zips["val"] = zf
-                elif "test" in fname and zips["test"] is None:
-                    zips["test"] = zf
-    return zips
+                for split in ["train", "val", "test"]:
+                    if split in fname and zips[split] is None:
+                        zips[split] = zf
+                        print(f"Found {split} archive: {zf} ({os.path.getsize(zf)/(1024**3):.2f} GB)")
 
-def extract_zips(zips, target_root="/kaggle/temp/dataset_root"):
-    os.makedirs(target_root, exist_ok=True)
-    print(f"\n[1/4] Extracting dataset archives to {target_root}...")
+    target_temp = "/kaggle/temp/dataset_root" if os.path.exists("/kaggle") else "dataset_root"
+    os.makedirs(target_temp, exist_ok=True)
+
     for split, zip_path in zips.items():
         if zip_path and os.path.exists(zip_path):
-            dest_dir = os.path.join(target_root, split)
-            if os.path.exists(dest_dir) and len(os.listdir(dest_dir)) > 0:
-                print(f"  Split '{split}' already exists in {dest_dir}, skipping extraction.")
-                continue
-            print(f"  Extracting {split} from {zip_path} ({os.path.getsize(zip_path)/(1024**3):.2f} GB)...")
-            t0 = time.time()
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall(target_root)
-            print(f"  -> Extracted '{split}' in {time.time()-t0:.1f}s")
-        else:
-            print(f"  WARNING: {split}.zip not found! Looking for existing directory at {os.path.join(target_root, split)}...")
-    print("[1/4] Dataset extraction complete.")
+            dest_dir = os.path.join(target_temp, split)
+            if not os.path.exists(dest_dir) or len(os.listdir(dest_dir)) == 0:
+                print(f"Extracting {split} from {zip_path} to {target_temp}...")
+                t0 = time.time()
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(target_temp)
+                print(f"  -> Extracted '{split}' in {time.time()-t0:.1f}s")
+            else:
+                print(f"Split '{split}' already extracted in {dest_dir}.")
+
+    if os.path.isdir(os.path.join(target_temp, "train")):
+        return target_temp
+
+    # If still not found, print detailed diagnostic of /kaggle/input
+    print("\n" + "!" * 80)
+    print("DEBUG: Could not locate 'train' split. Available directories and files:")
+    for s_root in ["/kaggle/input", "."]:
+        if os.path.isdir(s_root):
+            for root, dirs, files in os.walk(s_root):
+                depth = root.count(os.sep)
+                if depth < 4:
+                    print(f"  Directory: {root}")
+                    if files:
+                        print(f"    Files: {files[:5]} (total {len(files)})")
+    print("!" * 80 + "\n")
+    return target_temp
+
 
 def main():
     parser = argparse.ArgumentParser(description="Kaggle RelieF-CR Master Runner")
@@ -61,11 +97,7 @@ def main():
         print(f"  GPU [{i}]: {torch.cuda.get_device_name(i)} ({torch.cuda.get_device_properties(i).total_memory / 1024**3:.1f} GB)")
     print("=" * 80)
 
-    target_data_root = args.data_root or ("/kaggle/temp/dataset_root" if os.path.exists("/kaggle") else "dataset_root")
-    if not os.path.isdir(os.path.join(target_data_root, "train")):
-        zips = find_dataset_zips()
-        print(f"Found dataset archives: {zips}")
-        extract_zips(zips, target_root=target_data_root)
+    target_data_root = resolve_dataset_root(args.data_root)
 
     ckpt_dir = os.path.join(args.output_dir, "checkpoints")
     os.makedirs(ckpt_dir, exist_ok=True)
