@@ -31,9 +31,25 @@ class CloudReconstructionDataset(Dataset):
     MODALITIES = ["opt_cloudy", "opt_clean", "sar", "temporal", "dem", "mask"]
 
     def __init__(self, root, split="train"):
-        self.split_dir = os.path.join(root, split)
-        if not os.path.isdir(self.split_dir):
-            raise FileNotFoundError(f"Expected split directory {self.split_dir} to exist.")
+        # Resilient split resolution: handles root/split, root/split/split, or parent/split
+        candidates = [
+            os.path.join(root, split),
+            os.path.join(root, split, split),
+            root if os.path.basename(root) == split else None,
+            os.path.join(os.path.dirname(root), split) if os.path.basename(root) in ["train", "val", "test"] else None,
+            os.path.join(os.path.dirname(root), split, split) if os.path.basename(root) in ["train", "val", "test"] else None,
+        ]
+        self.split_dir = None
+        for cand in candidates:
+            if cand and os.path.isdir(cand) and any(os.path.isdir(os.path.join(cand, m)) for m in self.MODALITIES):
+                self.split_dir = cand
+                break
+
+        if self.split_dir is None:
+            # Fallback to direct path for error message
+            self.split_dir = os.path.join(root, split)
+            if not os.path.isdir(self.split_dir):
+                raise FileNotFoundError(f"Expected split directory for '{split}' to exist under {root}. Checked candidates: {[c for c in candidates if c]}")
 
         # Intersection check: only include patch IDs present across ALL 6 core modalities
         modality_sets = []

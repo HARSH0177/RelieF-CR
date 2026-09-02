@@ -21,14 +21,17 @@ def resolve_dataset_root(custom_root=None):
 
     search_roots = ["/kaggle/input", "/kaggle/working", ".", "./dataset_archives"]
     
-    # Check 1: Is there an ALREADY EXTRACTED train folder anywhere in inputs?
+    # Check 1: Look for dataset root containing 'train'
     for s_root in search_roots:
         if os.path.isdir(s_root):
             for root, dirs, _ in os.walk(s_root):
                 if "train" in dirs:
-                    train_dir = os.path.join(root, "train")
-                    # Verify train contains subfolders or .npy files
-                    if os.path.exists(os.path.join(train_dir, "opt_clean")) or os.path.exists(os.path.join(train_dir, "opt_cloudy")):
+                    train_p = os.path.join(root, "train")
+                    # Check direct or nested modality directory
+                    if os.path.isdir(train_p) and (
+                        any(os.path.isdir(os.path.join(train_p, m)) for m in ["opt_clean", "opt_cloudy", "sar"]) or
+                        os.path.isdir(os.path.join(train_p, "train"))
+                    ):
                         print(f"Found ready-to-use extracted dataset at: {root}")
                         return root
 
