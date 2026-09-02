@@ -214,7 +214,8 @@ def main():
     eval_model = GeneratorNoCrossAttn(c_opt=3, c_sar=2, c_temp=3, c_dem=4, base_ch=48).to(device)
     eval_model.load_state_dict(torch.load(best_ckpt, map_location=device))
     eval_model.eval()
-    test_metrics = run_evaluation(eval_model, test_loader, device)
+    summary_full_ref, summary_no_ref, calibration_corr = run_evaluation(eval_model, test_loader, device)
+    test_metrics = summary_full_ref["model"]
     
     results = {
         "ablation": "w/o Cross-Attention (Fixed Concat)",
