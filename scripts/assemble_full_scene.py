@@ -147,7 +147,7 @@ def assemble_scene_raster(
     s2_b08 = s2_b03_file.replace("B03", "B08")
     s2_vrts = [WarpedVRT(rasterio.open(p), crs=target_crs, transform=target_transform, width=width, height=height, resampling=Resampling.bilinear) for p in [s2_b03_file, s2_b04, s2_b08]]
     s2_raw = np.stack([vrt.read(1, window=win).astype(np.float32) for vrt in s2_vrts], axis=0)
-    temporal_full = (np.clip(s2_raw, 0.0, 10000.0) / 10000.0).astype(np.float32)
+    temporal_full = np.clip((s2_raw - 1000.0) / 10000.0, 0.0, 1.0).astype(np.float32)
 
     # Read DEM with Horn's method
     dem_src = rasterio.open(dem_file)

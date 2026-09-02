@@ -109,8 +109,8 @@ def main():
     p.add_argument("--batch_size", type=int, default=8)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--num_workers", type=int, default=2)
-    p.add_argument("--in_channels", type=int, default=3)  # corrected: Green,Red,NIR
-    p.add_argument("--use_sar", type=bool, default=True, help="Whether to use SAR input if available")
+    p.add_argument("--in_channels", type=int, default=3, help="Number of optical input channels (3 for LISS-IV)")
+    p.add_argument("--use_sar", action=argparse.BooleanOptionalAction, default=True, help="Whether to use SAR input if available")
     p.add_argument("--checkpoint_dir", type=str, default="checkpoints")
     args = p.parse_args()
 

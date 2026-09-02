@@ -10,7 +10,7 @@ We evaluate reconstruction performance using five standard quantitative remote s
     \item \textbf{Relative Dimensionless Global Error in Synthesis (ERGAS):} Evaluates overall spectral synthesis quality across all bands normalized by band means (lower is better).
     \item \textbf{Correlation Coefficient (CC):} Average Pearson correlation between reconstructed and ground-truth bands (higher is better, max 1.0).
 \end{enumerate}
-All metrics are evaluated strictly inside the cloud-occluded spatial region defined by binary cloud mask $\mathbf{M} > 0.5$ across all 1,611 held-out test patches.
+Quantitative reconstruction metrics are evaluated over the cloud-occluded footprint across all 1,611 held-out test patches: PSNR, SSIM, and ERGAS apply continuous cloud opacity weighting via $\mathbf{M} \in [0, 1]$, whereas SAM and CC are computed over the core cloud footprint ($\mathbf{M} > 0.5$).
 
 \begin{table*}[!t]
 \centering

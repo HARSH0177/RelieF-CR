@@ -149,7 +149,7 @@ class CloudReconstructionGeneratorV2(nn.Module):
         self.mean_head = nn.Sequential(nn.Conv2d(base_ch, c_opt, 3, padding=1), nn.Tanh())
         self.logvar_head = nn.Conv2d(base_ch, c_opt, 3, padding=1)
 
-        self._last_reliance_on_aux = None  # diagnostic, set on forward()
+        self._last_aux_entropy = None  # diagnostic: spatial attention entropy across aux tokens
 
     def forward(self, opt, sar, temp, dem):
         opt_full = self.opt_stem(opt)
@@ -166,8 +166,8 @@ class CloudReconstructionGeneratorV2(nn.Module):
         temp_h = self.temp_stn(temp_h, opt_h)
 
         aux_h = self.aux_proj(torch.cat([sar_h, temp_h], dim=1))
-        fused_h, reliance_on_aux = self.cross_attn(opt_h, aux_h)
-        self._last_reliance_on_aux = reliance_on_aux
+        fused_h, aux_entropy = self.cross_attn(opt_h, aux_h)
+        self._last_aux_entropy = aux_entropy
 
         f0 = self.fuse(torch.cat([fused_h, dem_h], dim=1))  # H/2, base_ch
 
@@ -208,7 +208,7 @@ if __name__ == "__main__":
     assert logvar_out.shape == (2, 3, 256, 256)
     conf = g.predict_confidence(logvar_out)
     print("confidence map:", conf.shape, "range:", conf.min().item(), conf.max().item())
-    print("reliance_on_aux (mean cross-attn weight on SAR+temporal):", g._last_reliance_on_aux)
+    print(f"Aux cross-attention spatial entropy: {g._last_aux_entropy:.4f}")
     n_params = sum(p.numel() for p in g.parameters())
     print(f"Generator params: {n_params/1e6:.2f}M")
     print("OK")

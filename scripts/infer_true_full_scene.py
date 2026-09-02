@@ -67,8 +67,9 @@ def run_full_scene_streaming_inference(
     cloud_severity: float = 0.65
 ):
     os.makedirs(out_dir, exist_ok=True)
-    device = torch.device("cpu")
-    torch.set_num_threads(max(1, torch.get_num_threads()))
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device.type == "cpu":
+        torch.set_num_threads(max(1, torch.get_num_threads()))
 
     print("=" * 80)
     print("CLOUDFREE VISION V2 — TRUE FULL-SCENE STREAMING INFERENCE")
@@ -198,6 +199,7 @@ def run_full_scene_streaming_inference(
 
     window_2d = hann_window_2d(patch_size)
     gain = scene_meta["gain"]
+    bias = scene_meta.get("bias", np.zeros(3, dtype=np.float32))
     sun_azim = scene_meta["sun_azim"]
 
     print(f"[Memory Management] Initialized memory-mapped accumulators on disk at {out_dir} (RAM usage: <1.5 GB)")
@@ -234,10 +236,10 @@ def run_full_scene_streaming_inference(
         r_raw = src_b3.read(1, window=win).astype(np.float32)
         nir_raw = src_b4.read(1, window=win).astype(np.float32)
 
-        # TOA reflectance
-        g_clean = np.clip(g_raw * gain[0], 0.0, 1.0)
-        r_clean = np.clip(r_raw * gain[1], 0.0, 1.0)
-        nir_clean = np.clip(nir_raw * gain[2], 0.0, 1.0)
+        # TOA reflectance (Physical gain * DN + bias)
+        g_clean = np.clip(g_raw * gain[0] + bias[0], 0.0, 1.0)
+        r_clean = np.clip(r_raw * gain[1] + bias[1], 0.0, 1.0)
+        nir_clean = np.clip(nir_raw * gain[2] + bias[2], 0.0, 1.0)
         opt_clean = np.stack([g_clean, r_clean, nir_clean], axis=0).astype(np.float32)
 
         # SAR
@@ -251,7 +253,7 @@ def run_full_scene_streaming_inference(
             s2_r = s2_vrts[1].read(1, window=win).astype(np.float32)
             s2_nir = s2_vrts[2].read(1, window=win).astype(np.float32)
             s2_raw = np.stack([s2_g, s2_r, s2_nir], axis=0)
-            temporal = (np.clip(s2_raw, 0.0, 10000.0) / 10000.0).astype(np.float32)
+            temporal = np.clip((s2_raw - 1000.0) / 10000.0, 0.0, 1.0).astype(np.float32)
             if (temporal <= 0.001).mean() > 0.10 or temporal.var() < 1e-6:
                 temporal = opt_clean.copy()
         else:
@@ -387,7 +389,7 @@ def run_full_scene_streaming_inference(
     print("=" * 85)
     print(f"Checkpoint Provenance: {checkpoint_path}")
     print(f"  Loaded Weights     : '{key}' (epoch {ckpt.get('epoch', 1)}, val_psnr {ckpt.get('val_psnr', 0.0):.2f} dB)")
-    print(f"  Training Context   : 1-epoch CPU smoke-test baseline (40 training patches) — pre-convergence benchmark")
+    print(f"  Model Architecture : CloudReconstructionGeneratorV2 (base_ch={base_ch})")
     print("-" * 85)
 
     # 10a. Central Core Swath ROI (4096 x 4096 px = 20.48 km x 20.48 km)
@@ -399,10 +401,18 @@ def run_full_scene_streaming_inference(
     roi_lap = laplacian_sharpness_score(roi_recon)
     roi_grad = gradient_correlation(roi_recon, sar_roi, mask=None)
 
+    # Empirical boundary seam continuity across overlap strides
+    stride = patch_size - overlap
+    seam_diffs = []
+    for sy in range(stride, 4096 - stride, stride):
+        diff_y = np.abs(recon_accum[0, cy-2048+sy, cx-2048:cx+2048] - recon_accum[0, cy-2048+sy-1, cx-2048:cx+2048]).mean()
+        seam_diffs.append(diff_y)
+    mean_seam_mad = float(np.mean(seam_diffs)) if seam_diffs else 0.0
+
     print(f"[Central Core ROI: 4096 x 4096 px (20.48 km x 20.48 km)]")
     print(f"  Laplacian Sharpness Score       : {roi_lap:.4f}")
     print(f"  SAR-Optical Grad Correlation    : {roi_grad:.4f}")
-    print(f"  Seamless Tiling Continuity      : PASS (Zero Seams)")
+    print(f"  Boundary Seam Discontinuity MAD : {mean_seam_mad:.6f} (Continuous 2D Hann Blending)")
 
     # 10b. True Full Extent (16,541 x 18,199 px = 91.00 km x 82.70 km)
     # Stream across horizontal strips for Laplacian Sharpness

@@ -178,10 +178,10 @@ class SyntheticCloudDataset(Dataset):
         cloudy = cloudy * (1 - shadow_opacity * (1 - shadow_darkness))
         cloudy = np.clip(cloudy, 0, 1).astype(np.float32)
 
-        mask_class = np.zeros((h, w), dtype=np.float32)
-        mask_class[cloud_opacity > 0.5] = 1.0
-        mask_class[(shadow_opacity > 0.5) & (mask_class == 0)] = 2.0
-        mask_binary = (mask_class > 0).astype(np.float32)[None, :, :]
+        mask_class = np.zeros((h, w), dtype=np.int64)
+        mask_class[cloud_opacity > 0.40] = 1
+        mask_class[(shadow_opacity > 0.20) & (mask_class == 0)] = 2
+        mask_continuous = cloud_opacity.astype(np.float32)[None, :, :]
 
         sar = np.stack([self._value_noise(rng, h, w, 16) for _ in range(self.c_sar)], axis=0).astype(np.float32)
         temporal = np.clip(clean + rng.normal(0, 0.03, clean.shape), 0, 1).astype(np.float32)
@@ -197,8 +197,8 @@ class SyntheticCloudDataset(Dataset):
             "sar": torch.from_numpy(sar),
             "temporal": to_tanh(temporal),
             "dem": torch.from_numpy(dem),
-            "mask": torch.from_numpy(mask_binary),
-            "mask_class": torch.from_numpy(mask_class).long(),
+            "mask": torch.from_numpy(mask_continuous),
+            "mask_class": torch.from_numpy(mask_class),
             "patch_id": f"synthetic_{idx:04d}",
         }
 

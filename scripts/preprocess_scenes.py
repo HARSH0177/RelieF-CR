@@ -407,7 +407,7 @@ def process_scene_streaming(
                         warp_mem_limit=256
                     )
 
-                    if (sar_vv_dn <= 0.0).mean() > 0.10 or (sar_vh_dn <= 0.0).mean() > 0.10:
+                    if (sar_vv_dn <= 0.0).mean() > 0.01 or (sar_vh_dn <= 0.0).mean() > 0.01:
                         rejection_reasons["sar_nodata"] += 1
                         continue
 
@@ -421,7 +421,8 @@ def process_scene_streaming(
                         s2_r = s2_vrts[1].read(1, window=win).astype(np.float32)
                         s2_nir = s2_vrts[2].read(1, window=win).astype(np.float32)
                         s2_raw = np.stack([s2_g, s2_r, s2_nir], axis=0)
-                        temporal_patch = (np.clip(s2_raw, 0.0, 10000.0) / 10000.0).astype(np.float32)
+                        # Sentinel-2 Processing Baseline >= 04.00 offset correction (-1000 DN BOA offset)
+                        temporal_patch = np.clip((s2_raw - 1000.0) / 10000.0, 0.0, 1.0).astype(np.float32)
                         if (temporal_patch <= 0.001).mean() > 0.10 or temporal_patch.var() < 1e-6:
                             temporal_patch = opt_clean.copy()
                     else:

@@ -84,11 +84,12 @@ class WindowedCrossAttention(nn.Module):
 
         out = window_reverse(fused, self.window, shape, (H, W))
         if attn_weights is not None:
+            # Shannon entropy across auxiliary spatial keys within window (measuring spatial dispersion)
             entropy = -torch.sum(attn_weights * torch.log(attn_weights + 1e-8), dim=-1)
-            reliance_on_aux = entropy.mean().item()
+            aux_spatial_entropy = entropy.mean().item()
         else:
-            reliance_on_aux = None
-        return out, reliance_on_aux
+            aux_spatial_entropy = None
+        return out, aux_spatial_entropy
 
 
 if __name__ == "__main__":
@@ -100,7 +101,7 @@ if __name__ == "__main__":
     print("Self-attention OK:", out_sa.shape)
 
     ca = WindowedCrossAttention(32, num_heads=4, window=8)
-    out_ca, reliance = ca(x, y)
+    out_ca, aux_entropy = ca(x, y)
     assert out_ca.shape == x.shape
-    print("Cross-attention OK:", out_ca.shape, "reliance_on_aux(mean attn weight)=", round(reliance, 4))
+    print("Cross-attention OK:", out_ca.shape, f"aux_spatial_entropy={aux_entropy:.4f}")
     print("OK")

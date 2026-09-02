@@ -27,13 +27,20 @@ from data.dataset import CloudReconstructionDataset, SyntheticCloudDataset
 
 
 def false_color(x_chw01):
-    """[Green,Red,NIR] -> display as [NIR,Red,Green], standard CIR composite."""
-    c = x_chw01.shape[0]
-    if c >= 3:
-        disp = x_chw01[[2, 1, 0]]
-    else:
-        disp = np.repeat(x_chw01[:1], 3, axis=0)
-    return np.clip(disp.transpose(1, 2, 0), 0, 1)
+    """Applies 2%-98% percentile stretch to [Green, Red, NIR] -> [NIR, Red, Green] CIR."""
+    # Channel order: 2=NIR, 1=Red, 0=Green
+    nir, r, g = x_chw01[2], x_chw01[1], x_chw01[0]
+    cir = np.stack([nir, r, g], axis=-1)
+
+    # Robust 2-98% percentile stretch per channel for publication contrast
+    stretched = np.zeros_like(cir)
+    for c in range(3):
+        p2, p98 = np.percentile(cir[..., c], (2, 98))
+        if p98 > p2:
+            stretched[..., c] = np.clip((cir[..., c] - p2) / (p98 - p2), 0.0, 1.0)
+        else:
+            stretched[..., c] = np.clip(cir[..., c], 0.0, 1.0)
+    return stretched
 
 
 def main():
@@ -51,9 +58,13 @@ def main():
 
     if args.synthetic:
         ds = SyntheticCloudDataset(n_samples=args.n_samples, patch_size=args.patch_size, severity=0.7, seed=3)
+        sample_indices = list(range(min(args.n_samples, len(ds))))
     else:
         ds = CloudReconstructionDataset(args.data_root, split="test")
-    loader = DataLoader(ds, batch_size=1, shuffle=False)
+        # Uniform deterministic sampling across the entire held-out test split
+        n_total = len(ds)
+        step = max(1, n_total // args.n_samples)
+        sample_indices = [min(i * step, n_total - 1) for i in range(args.n_samples)]
 
     gen = CloudReconstructionGeneratorV2(base_ch=args.base_ch).to(device)
     ckpt = torch.load(args.checkpoint, map_location=device)
@@ -61,22 +72,21 @@ def main():
     gen.load_state_dict(ckpt[state_key])
     gen.eval()
 
-    n = min(args.n_samples, len(ds))
+    n = len(sample_indices)
     cols = ["Cloudy Input", "Cloud/Shadow Mask", "SAR (VV)", "Reconstruction", "Ground Truth", "Uncertainty"]
     fig, axes = plt.subplots(n, len(cols), figsize=(3.1 * len(cols), 3.1 * n))
     if n == 1:
         axes = axes[None, :]
 
     with torch.no_grad():
-        for i, batch in enumerate(loader):
-            if i >= n:
-                break
-            opt_cloudy = batch["opt_cloudy"].to(device)
-            opt_clean = batch["opt_clean"].to(device)
-            sar = batch["sar"].to(device)
-            temporal = batch["temporal"].to(device)
-            dem = batch["dem"].to(device)
-            mask_class = batch["mask_class"][0].numpy()
+        for i, idx in enumerate(sample_indices):
+            batch = ds[idx]
+            opt_cloudy = batch["opt_cloudy"].unsqueeze(0).to(device)
+            opt_clean = batch["opt_clean"].unsqueeze(0).to(device)
+            sar = batch["sar"].unsqueeze(0).to(device)
+            temporal = batch["temporal"].unsqueeze(0).to(device)
+            dem = batch["dem"].unsqueeze(0).to(device)
+            mask_class = batch["mask_class"].squeeze().numpy()
 
             mean_out, logvar_out = gen(opt_cloudy, sar, temporal, dem)
             std_out = torch.exp(0.5 * logvar_out)[0].mean(dim=0).cpu().numpy()
@@ -91,7 +101,16 @@ def main():
             axes[i, 2].imshow(sar_band0, cmap="gray")
             axes[i, 3].imshow(false_color(fake01))
             axes[i, 4].imshow(false_color(clean01))
-            im_u = axes[i, 5].imshow(std_out, cmap="magma")
+
+            # Pure model-predicted uncertainty directly from generator logvar head (zero GT leakage)
+            u_map = std_out  # shape: (H, W)
+            u_min = np.percentile(u_map, 2)
+            u_max = np.percentile(u_map, 99.5)
+            if u_max <= u_min + 1e-6:
+                u_max = u_map.max()
+            u_stretched = np.clip((u_map - u_min) / (u_max - u_min + 1e-8), 0.0, 1.0)
+
+            im_u = axes[i, 5].imshow(u_stretched, cmap="magma", vmin=0.0, vmax=1.0)
 
             for j in range(len(cols)):
                 axes[i, j].axis("off")
@@ -111,7 +130,7 @@ def main():
                 cax_u = divider_u.append_axes("bottom", size="5%", pad=0.05)
                 cb_u = fig.colorbar(im_u, cax=cax_u, orientation="horizontal")
                 cb_u.ax.tick_params(labelsize=7)
-                cb_u.set_label("Pred. Std", fontsize=8)
+                cb_u.set_label("Pred. Std (Norm.)", fontsize=8)
 
     plt.tight_layout()
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)

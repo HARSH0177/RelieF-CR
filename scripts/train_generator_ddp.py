@@ -12,9 +12,10 @@ import argparse
 import time
 import math
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models"))
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data"))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data"))
 
 import torch
 import torch.distributed as dist
@@ -115,8 +116,9 @@ def train_one_epoch_ddp(gen, disc, ema, loader, opt_g, opt_d, sched_g, sched_d,
         opt_g.zero_grad()
         with torch.amp.autocast(device_type="cuda", enabled=True):
             fake_outputs = disc(mean_fake)
-            real_outputs_det = [(out[0].detach(), [f.detach() for f in out[1]]) for out in real_outputs]
-            g_total, breakdown = gen_loss_fn(mean_fake, logvar_fake, opt_clean, mask, real_outputs_det, fake_outputs)
+            with torch.no_grad():
+                real_outputs_fresh = disc(opt_clean)
+            g_total, breakdown = gen_loss_fn(mean_fake, logvar_fake, opt_clean, mask, real_outputs_fresh, fake_outputs)
 
         scaler_g.scale(g_total).backward()
         scaler_g.unscale_(opt_g)
@@ -158,7 +160,7 @@ def main():
     p.add_argument("--max_val_patches", type=int, default=None)
     p.add_argument("--patch_size", type=int, default=256)
     p.add_argument("--epochs", type=int, default=50)
-    p.add_argument("--batch_size", type=int, default=8, help="Per-GPU batch size (Total batch = batch_size * 2)")
+    p.add_argument("--batch_size", type=int, default=16, help="Per-GPU batch size (Total batch = batch_size * 2 = 32)")
     p.add_argument("--lr_g", type=float, default=2e-4)
     p.add_argument("--lr_d", type=float, default=2e-4)
     p.add_argument("--base_ch", type=int, default=48)
@@ -209,8 +211,8 @@ def main():
 
     gen_loss_fn = CombinedGeneratorLoss(device=device).to(device)
     adv_loss_fn = AdversarialLoss().to(device)
-    scaler_g = torch.amp.GradScaler("cuda", enabled=True)
-    scaler_d = torch.amp.GradScaler("cuda", enabled=True)
+    scaler_g = torch.cuda.amp.GradScaler(enabled=True)
+    scaler_d = torch.cuda.amp.GradScaler(enabled=True)
 
     if local_rank == 0:
         os.makedirs(args.checkpoint_dir, exist_ok=True)

@@ -2,17 +2,17 @@
 \label{sec:method}
 
 \subsection{Architectural Overview}
-\textbf{RelieF-CR} is formulated as a multi-scale conditional generator with learned geometric spatial alignment and windowed cross-modal attention fusion. The network operates on input tensors $\mathbf{X}_{\text{opt}} \in \mathbb{R}^{3 \times H \times W}$, $\mathbf{X}_{\text{sar}} \in \mathbb{R}^{2 \times H \times W}$, $\mathbf{X}_{\text{temp}} \in \mathbb{R}^{3 \times H \times W}$, and $\mathbf{X}_{\text{dem}} \in \mathbb{R}^{4 \times H \times W}$ (where $H=W=256$).
+\textbf{RelieF-CR} is formulated as a multi-scale conditional generator with learned geometric spatial alignment and windowed cross-modal attention fusion. The network operates on input tensors $\mathbf{X}_{\text{opt}} \in \mathbb{R}^{3 \times H \times W}$, $\mathbf{X}_{\text{sar}} \in \mathbb{R}^{2 \times H \times W}$, $\mathbf{X}_{\text{temp}} \in \mathbb{R}^{3 \times H \times W}$, and $\mathbf{X}_{\text{dem}} \in ([0, 1]^2 \times [-1, 1]^2)^{H \times W}$ (where $H=W=256$).
 
 \subsection{Multi-Stream Convolutional Stems}
 To project heterogeneous inputs with divergent physical statistics into a common latent feature manifold, dedicated convolutional stems process each sensor modality independently:
 \begin{align}
     \mathbf{F}_{\text{opt}} &= \text{Stem}_{\text{opt}}(\mathbf{X}_{\text{opt}}) \in \mathbb{R}^{C \times \frac{H}{2} \times \frac{W}{2}} \\
-    \mathbf{F}_{\text{sar}} &= \text{Stem}_{\text{sar}}(\mathbf{X}_{\text{sar}}) \in \mathbb{R}^{C \times \frac{H}{2} \times \frac{W}{2}} \\
-    \mathbf{F}_{\text{temp}} &= \text{Stem}_{\text{temp}}(\mathbf{X}_{\text{temp}}) \in \mathbb{R}^{C \times \frac{H}{2} \times \frac{W}{2}} \\
-    \mathbf{F}_{\text{dem}} &= \text{Stem}_{\text{dem}}(\mathbf{X}_{\text{dem}}) \in \mathbb{R}^{C_{\text{dem}} \times \frac{H}{2} \times \frac{W}{2}}
+    \mathbf{F}_{\text{sar}} &= \text{Stem}_{\text{sar}}(\mathbf{X}_{\text{sar}}) \in \mathbb{R}^{\frac{C}{2} \times \frac{H}{2} \times \frac{W}{2}} \\
+    \mathbf{F}_{\text{temp}} &= \text{Stem}_{\text{temp}}(\mathbf{X}_{\text{temp}}) \in \mathbb{R}^{\frac{C}{2} \times \frac{H}{2} \times \frac{W}{2}} \\
+    \mathbf{F}_{\text{dem}} &= \text{Stem}_{\text{dem}}(\mathbf{X}_{\text{dem}}) \in \mathbb{R}^{\frac{C}{4} \times \frac{H}{2} \times \frac{W}{2}}
 \end{align}
-where base channel width $C = 48$ and $C_{\text{dem}} = 32$.
+where base channel width $C = 48$, giving $C_{\text{sar}} = 24$, $C_{\text{temp}} = 24$, and $C_{\text{dem}} = 12$.
 
 \subsection{Spatial Transformer Networks (STN) for Sub-Pixel Alignment}
 Despite geographic coordinate reprojection, satellite datasets exhibit subtle inter-sensor registration jitter arising from satellite pointing variations, orbital drift, and relief displacement. To rectify these offsets, we insert lightweight Spatial Transformer Networks \cite{jaderberg2015spatial} after the SAR and temporal stems.
@@ -26,12 +26,12 @@ The final linear layer of $\mathcal{L}_{\theta}$ is initialized to identity: $\m
     \mathbf{F}_{\text{sar}}^{\text{align}} &= \text{GridSample}(\mathbf{F}_{\text{sar}}, \mathcal{T}_{\theta}(G)) \\
     \mathbf{F}_{\text{temp}}^{\text{align}} &= \text{GridSample}(\mathbf{F}_{\text{temp}}, \mathcal{T}_{\theta}(G))
 \end{align}
-The lightweight STN dynamically rectifies global and rigid inter-sensor spatial offsets, while localized non-rigid terrain layovers may be partially compensated by spatial token selection in the downstream windowed cross-attention mechanism. The aligned auxiliary representations are concatenated into a unified tensor $\mathbf{F}_{\text{aux}} = [\mathbf{F}_{\text{sar}}^{\text{align}}, \mathbf{F}_{\text{temp}}^{\text{align}}, \mathbf{F}_{\text{dem}}] \in \mathbb{R}^{160 \times \frac{H}{2} \times \frac{W}{2}}$.
+The lightweight STN dynamically rectifies global and rigid inter-sensor spatial offsets, while localized non-rigid terrain layovers may be partially compensated by spatial token selection in the downstream windowed cross-attention mechanism. The aligned radar and temporal representations are concatenated and projected into a unified auxiliary tensor $\mathbf{F}_{\text{aux}} = \text{Conv}_{1\times 1}([\mathbf{F}_{\text{sar}}^{\text{align}}, \mathbf{F}_{\text{temp}}^{\text{align}}]) \in \mathbb{R}^{C \times \frac{H}{2} \times \frac{W}{2}}$.
 
-\subsection{Windowed Multi-Head Cross-Attention Fusion}
+\subsection{Windowed Multi-Head Cross-Attention and Topographic Residual Prior Fusion}
 Standard global multi-head attention scales quadratically $\mathcal{O}((HW)^2)$ with spatial resolution. To maintain linear computational complexity while preserving localized spatial relationships, we divide feature maps into non-overlapping $8\times 8$ spatial windows.
 
-Within each window, optical features serve as Query ($\mathbf{Q} \in \mathbb{R}^{N \times d}$), while auxiliary features serve as Key ($\mathbf{K} \in \mathbb{R}^{N \times d}$) and Value ($\mathbf{V} \in \mathbb{R}^{N \times d}$), with $N = 64$:
+Within each window, optical features serve as Query ($\mathbf{Q} \in \mathbb{R}^{N \times C}$), while auxiliary features serve as Key ($\mathbf{K} \in \mathbb{R}^{N \times C}$) and Value ($\mathbf{V} \in \mathbb{R}^{N \times C}$), with $N = 64$:
 \begin{align}
     \mathbf{Q} &= \text{LN}(\mathbf{F}_{\text{opt}})\mathbf{W}_Q \\
     \mathbf{K} &= \text{LN}(\mathbf{F}_{\text{aux}})\mathbf{W}_K \\
@@ -39,13 +39,17 @@ Within each window, optical features serve as Query ($\mathbf{Q} \in \mathbb{R}^
 \end{align}
 Multi-head attention with $h = 4$ parallel heads computes the cross-modal fused tokens:
 \begin{equation}
-    \text{CrossAttention}(\mathbf{Q}, \mathbf{K}, \mathbf{V}) = \text{Softmax}\left(\frac{\mathbf{Q}\mathbf{K}^T}{\sqrt{d_k}} + \mathbf{B}\right)\mathbf{V}
+    \text{CrossAttention}(\mathbf{Q}, \mathbf{K}, \mathbf{V}) = \text{Softmax}\left(\frac{\mathbf{Q}\mathbf{K}^T}{\sqrt{d_k}}\right)\mathbf{V}
 \end{equation}
-where $\mathbf{B}$ is a learned relative position bias. A residual connection and LayerNorm (LN) complete the cross-attention block:
+A residual connection and LayerNorm (LN) complete the cross-attention block:
 \begin{equation}
     \mathbf{F}_{\text{fused}} = \text{LN}\left(\mathbf{F}_{\text{opt}} + \text{MLP}(\text{CrossAttention}(\mathbf{Q}, \mathbf{K}, \mathbf{V}))\right)
 \end{equation}
-This architecture forces the model to query SAR and temporal features selectively in regions where optical tokens exhibit high opacity.
+Following cross-attention, the 4-channel CartoDEM topographic feature map $\mathbf{F}_{\text{dem}}$ is integrated as an explicit relief prior via post-attention concatenation and convolution:
+\begin{equation}
+    \mathbf{F}_0 = \text{Conv}_{3\times 3}([\mathbf{F}_{\text{fused}}, \mathbf{F}_{\text{dem}}]) \in \mathbb{R}^{C \times \frac{H}{2} \times \frac{W}{2}}
+\end{equation}
+This architecture enables the network to adaptively weight and integrate auxiliary representations in regions where optical tokens exhibit atmospheric degradation, while grounding structural reconstruction in physical terrain morphology.
 
 \subsection{Multi-Scale Decoder with Dual-Head Output}
 The fused feature representation $\mathbf{F}_{\text{fused}}$ is decoded through a multi-scale U-Net decoder with residual convolutional blocks and transposed convolutions, receiving high-resolution skip connections directly from the optical input stem.

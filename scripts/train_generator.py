@@ -23,9 +23,10 @@ import argparse
 import time
 import math
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models"))
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data"))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data"))
 
 import torch
 from torch.utils.data import DataLoader
@@ -124,8 +125,9 @@ def train_one_epoch(gen, disc, ema, loader, opt_g, opt_d, sched_g, sched_d,
         opt_g.zero_grad()
         with torch.autocast(device_type=device.type, enabled=use_amp):
             fake_outputs = disc(mean_fake)
-            real_outputs_det = [(out[0].detach(), [f.detach() for f in out[1]]) for out in real_outputs]
-            g_total, breakdown = gen_loss_fn(mean_fake, logvar_fake, opt_clean, mask, real_outputs_det, fake_outputs)
+            with torch.no_grad():
+                real_outputs_fresh = disc(opt_clean)
+            g_total, breakdown = gen_loss_fn(mean_fake, logvar_fake, opt_clean, mask, real_outputs_fresh, fake_outputs)
 
         if use_amp:
             scaler_g.scale(g_total).backward()
@@ -215,8 +217,8 @@ def main():
 
     gen_loss_fn = CombinedGeneratorLoss(device=device).to(device)
     adv_loss_fn = AdversarialLoss().to(device)
-    scaler_g = torch.amp.GradScaler("cuda", enabled=(device.type == "cuda"))
-    scaler_d = torch.amp.GradScaler("cuda", enabled=(device.type == "cuda"))
+    scaler_g = torch.cuda.amp.GradScaler(enabled=(device.type == "cuda"))
+    scaler_d = torch.cuda.amp.GradScaler(enabled=(device.type == "cuda"))
 
     os.makedirs(args.checkpoint_dir, exist_ok=True)
     best_val_psnr = -float("inf")
