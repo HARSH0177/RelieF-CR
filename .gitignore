@@ -29,3 +29,8 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Private Manuscript & Raw Results
+paper/
+results/
+
