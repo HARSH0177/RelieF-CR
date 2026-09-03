@@ -7,8 +7,8 @@ Key technical innovations include:
 \begin{enumerate}
     \item Learned Spatial Transformer Networks (STNs) that rectify inter-sensor registration jitter.
     \item Windowed Multi-Head Cross-Attention that adaptively weights and integrates radar and temporal structural representations in degraded optical regions.
-    \item A dual-head heteroscedastic generator providing calibrated, pixel-wise uncertainty maps ($\rho = +0.245$).
+    \item A dual-head heteroscedastic generator providing calibrated, pixel-wise uncertainty maps ($\rho = +0.257$).
     \item A 7-term loss suite incorporating frequency-domain FFT and NDVI vegetation consistency constraints.
 \end{enumerate}
 
-Comprehensive experimental evaluation across held-out test patches demonstrates state-of-the-art performance with \textbf{30.96\,dB PSNR}, \textbf{0.965 SSIM}, \textbf{1.55$^\circ$ SAM}, and \textbf{7.29 ERGAS}. Exhaustive diagnostic auditing mathematically confirms that our model's structural correlation with SAR ($0.4791$) matches real optical ground truth ($0.4766$), ruling out radar over-imprinting artifacts. Finally, memory-mapped streaming inference enables continuous, seamless reconstruction of massive $300\,\text{MPix}$ full-swath satellite scenes, paving the way for reliable, year-round automated Earth observation analytics.
+Comprehensive experimental evaluation across held-out test patches demonstrates state-of-the-art performance with \textbf{28.89\,dB PSNR}, \textbf{0.963 SSIM}, \textbf{1.37$^\circ$ SAM}, \textbf{7.68 ERGAS}, and \textbf{0.883 CC}. Systematic architectural ablations across 5 isolated model variants confirm the significant contribution of the 4-channel DEM prior (+0.80\,dB), cross-attention fusion (+0.72\,dB), and heteroscedastic observation-noise attenuation (+0.74\,dB). Finally, memory-mapped streaming inference enables continuous, seamless reconstruction of massive $300\,\text{MPix}$ full-swath satellite scenes, paving the way for reliable, year-round automated Earth observation analytics.

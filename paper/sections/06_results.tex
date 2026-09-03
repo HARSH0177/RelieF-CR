@@ -22,9 +22,9 @@ Quantitative reconstruction metrics are evaluated over the cloud-occluded footpr
 Method & Paradigm / Input Stream & PSNR\,(dB) $\uparrow$ & SSIM $\uparrow$ & SAM\,(deg) $\downarrow$ & ERGAS $\downarrow$ & CC $\uparrow$ \\
 \midrule
 \multicolumn{7}{l}{\textbf{Direct Experimental Evaluation on 5.0\,m LISS-IV Test Set (1,611 Held-Out Patches):}} \\
-Bicubic Spatial Inpainting & Single-Image Interpolation & 6.21 & 0.386 & 10.35 & 166.90 & 0.327 \\
-Temporal Baseline (Sentinel-2) & Dry-Season Clear-Sky Prior & 13.11 & 0.656 & 7.48 & 73.99 & 0.397 \\
-\textbf{RelieF-CR (Proposed)} & \textbf{Quad-Modal STN Cross-Attention} & \textbf{30.96} & \textbf{0.965} & \textbf{1.55} & \textbf{7.29} & \textbf{0.743} \\
+Bicubic Spatial Inpainting & Single-Image Interpolation & 6.77 & 0.414 & 8.04 & 140.74 & 0.369 \\
+Temporal Baseline (Sentinel-2) & Dry-Season Clear-Sky Prior & 14.31 & 0.687 & 6.76 & 54.61 & 0.423 \\
+\textbf{RelieF-CR (Proposed)} & \textbf{Quad-Modal STN Cross-Attention} & \textbf{28.89} & \textbf{0.963} & \textbf{1.37} & \textbf{7.68} & \textbf{0.883} \\
 \midrule
 \multicolumn{7}{l}{\textit{Literature Reference on 10.0\,m SEN12MS-CR Benchmark (Cited for Architectural Context)$^\dagger$:}} \\
 SAR-Opt-cGAN \cite{grohnfeldt2018conditional} & ResNet + cGAN (SAR+Opt) & 24.80 & 0.815 & 5.20 & 18.40 & 0.742 \\
@@ -41,10 +41,10 @@ DiffCR \cite{li2024diffcr} & Conditional Diffusion Prior (SAR+Opt) & 29.20 & 0.9
 
 As detailed in Table~\ref{tab:main_benchmark}:
 \begin{itemize}
-    \item \textbf{Bicubic Inpainting} fails dramatically (PSNR $6.21\,\text{dB}$, SSIM $0.386$, ERGAS $166.90$) due to the inability of spatial interpolation to reconstruct large opaque cloud gaps.
-    \item \textbf{Temporal Substitution} suffers from severe spectral mismatch (PSNR $13.11\,\text{dB}$, SAM $7.48^\circ$) caused by seasonal agricultural phenology and illumination shifts.
-    \item \textbf{RelieF-CR} achieves \textbf{30.96\,dB PSNR} and \textbf{0.965 SSIM} on the held-out 5\,m test set, successfully combining structural radar backscatter, clear temporal priors, and topographic relief descriptors.
-    \item \textbf{Spectral Angle Mapper (SAM):} Our model achieves \textbf{1.55$^\circ$}, confirming strict radiometric preservation and spectral fidelity across VNIR bands for downstream vegetation modeling.
+    \item \textbf{Bicubic Inpainting} fails dramatically (PSNR $6.77\,\text{dB}$, SSIM $0.414$, ERGAS $140.74$) due to the inability of spatial interpolation to reconstruct large opaque cloud gaps.
+    \item \textbf{Temporal Substitution} suffers from severe spectral mismatch (PSNR $14.31\,\text{dB}$, SAM $6.76^\circ$) caused by seasonal agricultural phenology and illumination shifts.
+    \item \textbf{RelieF-CR} achieves \textbf{28.89\,dB PSNR}, \textbf{0.963 SSIM}, and \textbf{0.883 CC} on the held-out 5\,m test set, successfully combining structural radar backscatter, clear temporal priors, and topographic relief descriptors.
+    \item \textbf{Spectral Angle Mapper (SAM):} Our model achieves \textbf{1.37$^\circ$}, confirming strict radiometric preservation and spectral fidelity across VNIR bands for downstream vegetation modeling.
 \end{itemize}
 
 \subsection{Qualitative Analysis Under Severe Cloud Coverage}
