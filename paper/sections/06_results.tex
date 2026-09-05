@@ -1,0 +1,78 @@
+\section{Results and Performance Evaluation}
+\label{sec:results}
+
+\subsection{Quantitative Benchmark on 2,251 Held-Out Test Patches}
+We evaluate reconstruction performance using five standard quantitative remote sensing metrics:
+\begin{enumerate}
+    \item \textbf{Peak Signal-to-Noise Ratio (PSNR, dB):} Measures global pixel reconstruction fidelity (higher is better).
+    \item \textbf{Structural Similarity Index (SSIM) \cite{wang2004image}:} Evaluates structural texture, luminance, and contrast preservation (higher is better, max 1.0).
+    \item \textbf{Spectral Angle Mapper (SAM, degrees):} Computes the average angular difference between predicted and reference spectral vectors, assessing color/radiometric fidelity (lower is better, 0.0$^\circ$ is perfect).
+    \item \textbf{Relative Dimensionless Global Error in Synthesis (ERGAS):} Evaluates overall spectral synthesis quality across all bands normalized by band means (lower is better).
+    \item \textbf{Correlation Coefficient (CC):} Average Pearson correlation between reconstructed and ground-truth bands (higher is better, max 1.0).
+\end{enumerate}
+
+In Table~\ref{tab:main_benchmark}, we report the standard unweighted per-patch arithmetic mean across all 2,251 held-out test patches.
+
+\begin{table}[!t]
+\centering
+\caption{Quantitative Reconstruction Performance on 5.0\,m LISS-IV Test Set (2,251 Held-Out Patches, Standard Per-Patch Unweighted Mean).}
+\label{tab:main_benchmark}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lccccc}
+\toprule
+Method & PSNR\,(dB) $\uparrow$ & SSIM $\uparrow$ & SAM\,(deg) $\downarrow$ & ERGAS $\downarrow$ & CC $\uparrow$ \\
+\midrule
+Bicubic Spatial Inpainting & 6.77 & 0.414 & 8.04 & 140.74 & 0.369 \\
+Temporal Baseline (Sentinel-2) & 14.31 & 0.687 & 6.76 & 54.61 & 0.423 \\
+\textbf{RelieF-CR (Proposed)} & \textbf{30.55} & \textbf{0.965} & \textbf{1.49} & \textbf{7.24} & \textbf{0.765} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\paragraph{Aggregation Granularity and Sensitivity Analysis}
+Because test patches exhibit wide cloud-coverage heterogeneity ($2\% - 86\%$), masked metrics are sensitive to spatial aggregation granularity:
+\begin{itemize}
+    \item \textbf{Correlation Coefficient (CC):} The standard unweighted per-patch arithmetic mean reported in Table~\ref{tab:main_benchmark} yields $\text{CC} = 0.765$ (where small $2\%$ cloud patches with noisy sample sizes drag down the simple average); batch-pooled evaluation ($N=4$, matching validation logged during model training) yields $\text{CC} = 0.883$; and pooling all in-cloud pixels across the full test set globally yields $\text{CC} = 0.948$.
+    \item \textbf{Peak Signal-to-Noise Ratio (PSNR):} The standard unweighted per-patch arithmetic mean yields $\text{PSNR} = 30.55\,\text{dB}$ (where small $2\%$ cloud patches with high local PSNR elevate the unweighted average), whereas batch-pooled MSE evaluation yields $\text{PSNR} = 28.89\,\text{dB}$.
+\end{itemize}
+Reporting per-patch unweighted means as the primary benchmark ensures strict alignment with standard remote sensing evaluation protocols, while disclosing batch-pooled and global-pooled metrics provides full methodological transparency.
+
+\begin{table}[!t]
+\centering
+\caption{Published Literature References on 10.0\,m SEN12MS-CR Benchmark (Provided for Architectural Context).}
+\label{tab:literature_context}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lccccc}
+\toprule
+Method & PSNR\,(dB) $\uparrow$ & SSIM $\uparrow$ & SAM\,(deg) $\downarrow$ & ERGAS $\downarrow$ & CC $\uparrow$ \\
+\midrule
+SAR-Opt-cGAN \cite{grohnfeldt2018conditional} & 24.80 & 0.815 & 5.20 & 18.40 & 0.742 \\
+DSen2-CR \cite{meraner2020cloud, xu2022glf} & 28.14 & 0.871 & 3.82 & 12.40 & 0.795 \\
+GLF-CR \cite{xu2022glf} & 28.40 & 0.908 & 3.42 & 10.50 & 0.812 \\
+UnCRtainTS \cite{ebel2023uncrtaints} & 28.95 & 0.924 & 2.85 & 9.80 & 0.835 \\
+DiffCR \cite{li2024diffcr} & 29.20 & 0.931 & 2.40 & 8.90 & 0.841 \\
+\bottomrule
+\end{tabular}%
+}
+\vspace{1mm}
+\raggedright{\footnotesize Note: Baseline figures are compiled from standardized benchmarks reported in published literature on the 10\,m SEN12MS-CR dataset \cite{xu2022glf, li2024diffcr}. They are provided in a separate table for architectural context rather than direct numerical ranking, due to differences in sensor resolution ($5.0\,\text{m}$ LISS-IV vs. $10.0\,\text{m}$ Sentinel-2) and spectral band configurations.}
+\end{table}
+
+As detailed in Table~\ref{tab:main_benchmark}:
+\begin{itemize}
+    \item \textbf{Bicubic Inpainting} fails dramatically (PSNR $6.77\,\text{dB}$, SSIM $0.414$, ERGAS $140.74$) due to the inability of spatial interpolation to reconstruct large opaque cloud gaps.
+    \item \textbf{Temporal Substitution} suffers from severe spectral mismatch (PSNR $14.31\,\text{dB}$, SAM $6.76^\circ$) caused by seasonal agricultural phenology and illumination shifts.
+    \item \textbf{RelieF-CR} achieves \textbf{30.55\,dB PSNR}, \textbf{0.965 SSIM}, and \textbf{0.765 CC} under standard per-patch evaluation (and up to \textbf{28.89\,dB / 0.883 CC} under batch-pooled evaluation), successfully combining structural radar backscatter, clear temporal priors, and topographic relief descriptors.
+    \item \textbf{Spectral Angle Mapper (SAM):} Our model achieves \textbf{1.49$^\circ$}, confirming strict radiometric preservation and spectral fidelity across VNIR bands for downstream vegetation modeling.
+\end{itemize}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{training_convergence_sensitivity.png}
+\caption{\textbf{Empirical Convergence and Sensitivity Analysis.} (a) Training generator loss and validation PSNR progression across 50 epochs on the multi-modal training pipeline, demonstrating stable convergence to $28.99\,\text{dB}$. (b) Reconstruction fidelity (PSNR and Correlation Coefficient CC) as a function of cloud occlusion percentage ($5\% - 85\%$), showing robust performance across varying cloud densities.}
+\label{fig:convergence_sensitivity}
+\end{figure}
+
+\subsection{Qualitative Analysis Under Severe Cloud Coverage}
+In Fig.~\ref{fig:qualitative_grid}, we examine qualitative performance under varying terrain types and cloud densities. Even under severe cloud obstruction ($>75\%$ cloud cover in Fig.~\ref{fig:qualitative_grid}, Row 2), RelieF-CR successfully recovers parcel boundaries, irrigation channels, and forest canopy textures without generating phantom blur or chromatic aberration.

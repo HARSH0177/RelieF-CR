@@ -1,13 +1,12 @@
 {
   "ablation": "w/o Frequency FFT Loss (Spatial only)",
-  "epochs": 50,
-  "best_val_psnr": 33.93,
+  "epochs": 20,
+  "best_val_psnr": 35.47,
   "test_metrics": {
-    "psnr": 21.9900,
-    "ssim": 0.9199,
-    "sam": 1.8845,
-    "ergas": 12.9197,
-    "cc": 0.9348,
-    "sar_gradient_correlation": 0.9208
+    "psnr": 28.449445318668445,
+    "ssim": 0.9587892963249349,
+    "sam": 1.5537342008546735,
+    "ergas": 7.964699121753543,
+    "cc": 0.874240246925054
   }
 }

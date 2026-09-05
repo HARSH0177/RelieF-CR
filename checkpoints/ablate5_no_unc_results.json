@@ -1,13 +1,12 @@
 {
   "ablation": "w/o Uncertainty Head (L1 Loss Only)",
-  "epochs": 50,
-  "best_val_psnr": 34.97,
+  "epochs": 20,
+  "best_val_psnr": 35.43,
   "test_metrics": {
-    "psnr": 23.0213,
-    "ssim": 0.9239,
-    "sam": 1.8931,
-    "ergas": 11.4406,
-    "cc": 0.9403,
-    "sar_gradient_correlation": 0.9202
+    "psnr": 28.14584732055664,
+    "ssim": 0.9582349214148014,
+    "sam": 1.5935653469241258,
+    "ergas": 8.148052241906814,
+    "cc": 0.8679284050479427
   }
 }

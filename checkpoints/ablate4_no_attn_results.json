@@ -1,13 +1,12 @@
 {
   "ablation": "w/o Cross-Attention (Fixed Concat)",
-  "epochs": 50,
-  "best_val_psnr": 36.32,
+  "epochs": 20,
+  "best_val_psnr": 35.34,
   "test_metrics": {
-    "psnr": 24.5872,
-    "ssim": 0.9296,
-    "sam": 1.7060,
-    "ergas": 9.7016,
-    "cc": 0.9520,
-    "sar_gradient_correlation": 0.9221
+    "psnr": 28.17175169870363,
+    "ssim": 0.9593424384193779,
+    "sam": 1.4918352407766573,
+    "ergas": 8.146620232787253,
+    "cc": 0.8829673322239103
   }
 }

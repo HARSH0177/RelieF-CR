@@ -1,0 +1,11 @@
+Occluded Pixels: 60497889
+mean_z: 0.031127
+std_z: 0.397295
+median_z: 0.006390
+skew_z: 0.008130
+kurt_z: 10.907677
+pearson_r: 0.133715
+pearson_p: 0.000000e+00
+spearman_r: 0.095859
+mean_sigma: 0.065793
+mean_err: 0.017815

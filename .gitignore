@@ -14,13 +14,18 @@ ENV/
 
 # Large datasets & raw geo-archives
 dataset_root/
+dataset_archives/
 _temp_extracted/
 scratch/
+outputs/
+project_context.txt
 
 # Checkpoint binaries & large weights
 *.pth
 *.pt
 *.zip
+*.tar.gz
+checkpoints/generator_best/
 !checkpoints/*.json
 
 # System files & IDEs
@@ -30,7 +35,13 @@ Thumbs.db
 .idea/
 *.swp
 
-# Private Manuscript & Raw Results
-paper/
-results/
+# Bulky / unused figure files
+paper/figures/comparison_grid.png
+paper/figures/comparison_grid.pdf
+paper/figures/comparison_grid_enhanced.png
+paper/figures/patch_uncertainty_arrays/
+paper/figures/*.npz
+paper/_overleaf_staging/
 
+# Results
+results/

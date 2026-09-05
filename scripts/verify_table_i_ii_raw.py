@@ -39,9 +39,16 @@ from scripts.evaluate import (
     masked_cc,
     gradient_correlation,
 )
+import argparse
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Raw Evidence Verification for Table I and Table II")
+    parser.add_argument("--data_root", type=str, default=os.path.join(PROJECT_ROOT, "dataset_root"), help="Path to dataset root")
+    parser.add_argument("--checkpoint", type=str, default=os.path.join(PROJECT_ROOT, "checkpoints", "generator_best.pt"), help="Path to checkpoint")
+    parser.add_argument("--max_patches", type=int, default=None, help="Optional limit on patches to evaluate")
+    args = parser.parse_args()
+
     print("=" * 90)
     print("RAW EVIDENCE VERIFICATION — Table I & Table II")
     print("=" * 90)
@@ -54,7 +61,7 @@ def main():
     # =========================================================================
     # TASK 4: Checkpoint identity
     # =========================================================================
-    ckpt_path = os.path.join(PROJECT_ROOT, "checkpoints", "generator_best.pt")
+    ckpt_path = args.checkpoint
     print("=" * 90)
     print("TASK 4: CHECKPOINT IDENTITY CONFIRMATION")
     print("=" * 90)
@@ -82,7 +89,7 @@ def main():
     # =========================================================================
     # Load dataset
     # =========================================================================
-    data_root = os.path.join(PROJECT_ROOT, "dataset_root")
+    data_root = args.data_root
     ds = CloudReconstructionDataset(data_root, split="test")
     print(f"Test dataset loaded: {len(ds)} patches")
     print()
@@ -102,7 +109,7 @@ def main():
     print()
 
     # =========================================================================
-    # TASK 1: Full evaluation across all 1,611 patches
+    # TASK 1: Full evaluation across all test patches
     # TASK 2: Per-patch metrics for the 20 sampled patches
     # TASK 3: SAR-Optical gradient correlation for the 20 sampled patches
     # =========================================================================
@@ -209,7 +216,7 @@ def main():
     # =========================================================================
     print()
     print("=" * 90)
-    print("TASK 1 FINAL: AGGREGATED TABLE I METRICS (all 1,611 test patches)")
+    print("TASK 1 FINAL: AGGREGATED TABLE I METRICS (all test patches)")
     print("=" * 90)
     print(f"Total patches evaluated: {len(all_psnr)}")
     print(f"Total wall time: {elapsed_total:.1f}s ({elapsed_total/60:.1f} min)")

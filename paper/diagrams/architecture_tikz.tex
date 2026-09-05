@@ -1,0 +1,80 @@
+% ==============================================================================
+% CloudFree Vision v2: Multi-Modal SAR-Optical-Topographic Cross-Attention Architecture
+% IEEE Transactions on Geoscience and Remote Sensing (TGRS) TikZ Figure Source
+% ==============================================================================
+\begin{figure*}[t]
+\centering
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[
+    font=\sffamily\small,
+    box/.style={draw=#1!80!black, fill=#1!12, rounded corners=4pt, line width=1pt, align=center, minimum height=1.1cm, minimum width=2.4cm},
+    groupbox/.style={draw=gray!50, fill=gray!5, rounded corners=6pt, dashed, line width=1pt, inner sep=8pt},
+    arrow/.style={->, >=stealth, line width=1.2pt, draw=gray!70!black},
+    optarrow/.style={->, >=stealth, line width=1.2pt, draw=blue!70!black},
+    sararrow/.style={->, >=stealth, line width=1.2pt, draw=orange!80!black},
+    temparrow/.style={->, >=stealth, line width=1.2pt, draw=purple!70!black},
+    demarrow/.style={->, >=stealth, line width=1.2pt, draw=teal!70!black},
+    skiparrow/.style={->, >=stealth, line width=1.2pt, dashed, draw=blue!70!black}
+]
+
+    % 1. Input Modalities (Left)
+    \node[box=blue] (opt_in) at (0, 4.5) {\textbf{Cloudy Optical}\\\scriptsize LISS-IV $[B, 3, 256, 256]$};
+    \node[box=orange] (sar_in) at (0, 3.0) {\textbf{Sentinel-1 SAR}\\\scriptsize Dual-Pol VV/VH $[B, 2, 256, 256]$};
+    \node[box=purple] (temp_in) at (0, 1.5) {\textbf{Temporal S-2}\\\scriptsize Dry Clear-Sky $[B, 3, 256, 256]$};
+    \node[box=teal] (dem_in) at (0, 0.0) {\textbf{CartoDEM 4-Ch}\\\scriptsize Elev, Slope, Sin, Cos $[B, 4, 256, 256]$};
+
+    % 2. Feature Extraction Stems
+    \node[box=blue] (opt_stem) at (3.5, 4.5) {\textbf{Optical Stem}\\\scriptsize Conv3x3 $\to [B, 48, 128, 128]$};
+    \node[box=orange] (sar_stem) at (3.5, 3.0) {\textbf{SAR Stem}\\\scriptsize Conv3x3 $\to [B, 48, 128, 128]$};
+    \node[box=purple] (temp_stem) at (3.5, 1.5) {\textbf{Temporal Stem}\\\scriptsize Conv3x3 $\to [B, 48, 128, 128]$};
+    \node[box=teal] (dem_stem) at (3.5, 0.0) {\textbf{DEM Stem}\\\scriptsize Conv3x3 $\to [B, 32, 128, 128]$};
+
+    \draw[optarrow] (opt_in) -- (opt_stem);
+    \draw[sararrow] (sar_in) -- (sar_stem);
+    \draw[temparrow] (temp_in) -- (temp_stem);
+    \draw[demarrow] (dem_in) -- (dem_stem);
+
+    % 3. STN Spatial Alignment
+    \node[box=red] (stn_sar) at (6.6, 3.0) {\textbf{STN Alignment}\\\scriptsize Affine Warping};
+    \node[box=red] (stn_temp) at (6.6, 1.5) {\textbf{STN Alignment}\\\scriptsize Affine Warping};
+
+    \draw[sararrow] (sar_stem) -- (stn_sar);
+    \draw[temparrow] (temp_stem) -- (stn_temp);
+    \draw[optarrow, dotted] (opt_stem.south) -- (stn_sar.north west) node[midway, above=-2pt, sloped] {\tiny Ref};
+
+    % 4. Auxiliary Concatenation
+    \node[box=gray, minimum height=2.8cm, minimum width=2.2cm] (aux_concat) at (9.4, 2.0) {\textbf{Auxiliary Feature}\\\textbf{Concatenation}\\\scriptsize $[B, 160, 128, 128]$};
+
+    \draw[sararrow] (stn_sar) -- (aux_concat.west |- stn_sar);
+    \draw[temparrow] (stn_temp) -- (aux_concat.west |- stn_temp);
+    \draw[demarrow] (dem_stem.east) -- (aux_concat.south west);
+
+    % 5. Cross-Attention
+    \node[box=magenta, minimum height=2.5cm, minimum width=2.6cm] (cross_attn) at (12.8, 3.5) {\textbf{Windowed}\\\textbf{Cross-Attention}\\\scriptsize $8\times 8$ Local Windows\\\scriptsize $\mathbf{Q}$: Optical, $\mathbf{K},\mathbf{V}$: Aux};
+
+    \draw[optarrow] (opt_stem.east) -- (cross_attn.west |- opt_stem) node[midway, above] {\scriptsize Query $\mathbf{Q}$};
+    \draw[arrow] (aux_concat.east) -- (cross_attn.south west) node[midway, below, sloped] {\scriptsize Keys $\mathbf{K}$, Values $\mathbf{V}$};
+
+    % 6. Decoder
+    \node[box=cyan, minimum height=2.5cm, minimum width=2.2cm] (decoder) at (16.0, 3.5) {\textbf{Multi-Scale}\\\textbf{Decoder}\\\scriptsize ResBlocks + UpConv\\\scriptsize $[B, 48, 256, 256]$};
+
+    \draw[arrow] (cross_attn) -- (decoder);
+    \draw[skiparrow] (opt_stem.north) to[bend left=25] node[midway, above] {\scriptsize High-Resolution Skip Connection} (decoder.north);
+
+    % 7. Dual Heads
+    \node[box=teal] (mean_head) at (19.4, 4.3) {\textbf{Clear-Sky Mean Head}\\\scriptsize $\hat{y} \in [-1, 1]$ $[B, 3, 256, 256]$};
+    \node[box=red] (var_head) at (19.4, 2.7) {\textbf{Heteroscedastic Head}\\\scriptsize $\log \sigma^2 \in \mathbb{R}$ $[B, 3, 256, 256]$};
+
+    \draw[arrow] (decoder.east |- mean_head) -- (mean_head);
+    \draw[arrow] (decoder.east |- var_head) -- (var_head);
+
+    % Loss Framework Box at Bottom
+    \node[draw=indigo!80!black, fill=indigo!8, rounded corners=4pt, line width=1pt, minimum width=19.5cm, minimum height=0.9cm] (loss_box) at (9.7, -1.2) {%
+        \textbf{7-Term Loss Optimization Suite:} $\mathcal{L}_{\mathrm{Total}} = 1.0\,\mathcal{L}_{\mathrm{NLL}} + 10.0\,\mathcal{L}_{\mathrm{L1}} + 10.0\,\mathcal{L}_{\mathrm{FM}} + 0.1\,\mathcal{L}_{\mathrm{FFT}} + 0.5\,\mathcal{L}_{\mathrm{Sobel}} + 0.2\,\mathcal{L}_{\mathrm{Spec}} + 1.0\,\mathcal{L}_{\mathrm{Adv}}$%
+    };
+
+\end{tikzpicture}
+}
+\caption{\textbf{CloudFree Vision v2 End-to-End Architecture.} The generator ingests four multi-modal sensor streams (LISS-IV optical, Sentinel-1 SAR, Sentinel-2 dry-season reference, and 4-channel CartoDEM topography). Spatial Transformer Networks (STN) ensure sub-pixel alignment before windowed multi-head cross-attention fusion. The decoder feeds dual output heads producing the clear-sky mean reconstruction $\hat{y}$ and heteroscedastic uncertainty variance $\log \sigma^2$.}
+\label{fig:system_architecture}
+\end{figure*}

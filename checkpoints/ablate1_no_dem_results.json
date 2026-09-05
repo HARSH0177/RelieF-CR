@@ -1,13 +1,12 @@
 {
   "ablation": "w/o 4-Channel DEM (Topography)",
-  "epochs": 50,
-  "best_val_psnr": 34.44,
+  "epochs": 20,
+  "best_val_psnr": 35.15,
   "test_metrics": {
-    "psnr": 23.0729,
-    "ssim": 0.9208,
-    "sam": 1.7974,
-    "ergas": 11.5075,
-    "cc": 0.9413,
-    "sar_gradient_correlation": 0.9211
+    "psnr": 28.303935991111377,
+    "ssim": 0.9582512746465967,
+    "sam": 1.6251473640296477,
+    "ergas": 8.161976457790416,
+    "cc": 0.8691655849976284
   }
 }

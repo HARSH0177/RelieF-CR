@@ -1,0 +1,45 @@
+{
+  "checkpoint": "/kaggle/working/checkpoints/generator_best.pt",
+  "eval_mode": "both",
+  "regime_a_full_reference": {
+    "model": {
+      "psnr": 28.894859219273776,
+      "ssim": 0.9634993897825831,
+      "sam": 1.3688561679623652,
+      "ergas": 7.683360776220962,
+      "cc": 0.8833684532531045
+    },
+    "bicubic": {
+      "psnr": 6.771311563802949,
+      "ssim": 0.41419789635402376,
+      "sam": 8.042709710750174,
+      "ergas": 140.737295547062,
+      "cc": 0.36935312726290515
+    },
+    "temporal_sub": {
+      "psnr": 14.306134433611065,
+      "ssim": 0.687167651475744,
+      "sam": 6.755799203159961,
+      "ergas": 54.607300708041386,
+      "cc": 0.4231818105816846
+    }
+  },
+  "regime_b_no_reference": {
+    "model": {
+      "laplacian_sharpness_score": 16.803123655577078,
+      "no_ref_perceptual_score": 16.803123655577078,
+      "sar_gradient_correlation": 0.8411715614034775
+    },
+    "bicubic": {
+      "laplacian_sharpness_score": 23.39259421360408,
+      "no_ref_perceptual_score": 23.39259421360408,
+      "sar_gradient_correlation": 0.7899659952373369
+    },
+    "temporal_sub": {
+      "laplacian_sharpness_score": 18.192632436118227,
+      "no_ref_perceptual_score": 18.192632436118227,
+      "sar_gradient_correlation": 0.8004555905118902
+    }
+  },
+  "uncertainty_calibration_corr": 0.2566560049766316
+}
