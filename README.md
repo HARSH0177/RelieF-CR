@@ -1,3 +1,15 @@
+---
+title: RelieF-CR Quad-Modal Cloud Reconstruction
+emoji: 🛰️
+colorFrom: blue
+colorTo: indigo
+sdk: streamlit
+sdk_version: 1.38.0
+app_file: app.py
+pinned: false
+license: mit
+---
+
 <div align="center">
 
 # 🛰️ RelieF-CR (CloudFree Vision)
