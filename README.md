@@ -181,6 +181,53 @@ graph TD
 4. **Deep U-Net Feature Trunk:** Hierarchical encoder-decoder with skip connections and residual bottleneck self-attention.
 5. **Dual Multi-Task Output Heads:** Predicts ground reflectance $\hat{\mathbf{y}} \in [-1, 1]^3$ and heteroscedastic log-variance $\mathbf{s} = \log\sigma^2 \in \mathbb{R}^3$.
 
+### 🔄 Multi-Modal Ingestion & Generative Reconstruction Sequence Diagram
+
+The sequence diagram below models the dynamic, multi-stage execution flow across quad-modal sensor alignment, sub-pixel STN warping, windowed cross-attention routing, deep generative reconstruction, and seamless full-swath Hann blending:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Analyst as EO Analyst / Pipeline Trigger
+    participant Ingest as Quad-Modal Ingestion Tiler
+    participant STN as Spatial Transformer (STN)
+    participant Attn as Windowed Cross-Attention
+    participant Topo as CartoDEM Terrain Stem
+    participant Gen as Multi-Scale U-Net Generator
+    participant Critic as Spectral PatchGAN & Loss Engine
+    participant Blender as Hann-Window Swath Blender
+
+    Analyst->>Ingest: Submit AOI Coordinates & Sensor Bounds (Assam Basin)
+    Ingest->>Ingest: Stream LISS-IV (5m), S1 SAR (10m), S2 Temporal (10m) & CartoDEM (30m)
+    Ingest->>Ingest: Generate Overlapping 256x256 Tiles (64px Stride)
+    
+    Ingest->>STN: Forward Cross-Modal Auxiliary Patches (SAR + Temporal)
+    STN->>STN: Regress 6-Parameter Affine Matrix A_theta (Spatial Jitter Correction)
+    STN-->>Attn: Stream Sub-Pixel Warped SAR/Temporal Feature Maps (K, V)
+
+    Ingest->>Topo: Stream Normalized Elevation (Z)
+    Topo->>Topo: Horn Convolution → Slope & Continuous Aspect (sin Phi, cos Phi)
+    Topo-->>Gen: Provide 4-Channel Terrain Relief Descriptors
+
+    Ingest->>Attn: Optical Features → Generate Query Tokens (Q)
+    Attn->>Attn: Local 8x8 Window Cross-Attention (Q: Optical, K,V: Warped SAR+Temp)
+    Attn-->>Gen: Route Microwave Surface Geometry into Cloud Holes (O(HW) Linear Cost)
+
+    Gen->>Gen: Quad-Modal Feature Fusion + Skip-Connected U-Net Decoder
+    Gen->>Gen: Dual-Head Split → Mean Reflectance y_hat + Uncertainty log(sigma^2)
+
+    alt Training Mode (Supervised Backward Optimization)
+        Gen->>Critic: Forward Predicted Reflectance y_hat & Variance Map
+        Critic->>Critic: 2-Scale PatchGAN Realism Evaluation
+        Critic->>Critic: Compute 7-Term Composite Loss (NLL + FFT + Sobel + L1 + FM)
+        Critic-->>Gen: Backpropagate Gradients (Zero Microwave Speckle Bleed)
+    else Inference Mode (Full-Swath 300 MPix Reconstruction)
+        Gen->>Blender: Stream Tile Reflectance & Calibrated Uncertainty Tensors
+        Blender->>Blender: 2D Cosine Hann Window Weighting (Smooth Edge Overlap)
+        Blender-->>Analyst: Export Reconstructed GeoTIFF Mosaic (<1.5 GB RAM)
+    end
+```
+
 ---
 
 ## 🗺️ Multi-Modal Dataset & Study Area
