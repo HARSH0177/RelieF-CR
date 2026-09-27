@@ -15,6 +15,7 @@ matplotlib>=3.7.0
 scikit-image>=0.20.0
 
 # Interactive Dashboard & Web
+gradio>=4.0.0
 streamlit>=1.25.0
 
 # Development & Progress Tracking
